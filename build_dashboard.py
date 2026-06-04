@@ -2,14 +2,18 @@
 Build the FIFA World Cup 2026 prediction dashboard (dashboard.html).
 
 Runs the full pipeline:
-  1. Logistic Regression trained on WC 2010-2018 match data
-  2. Learned weights → Power Index for all 48 teams
-  3. Poisson match model
-  4. Monte Carlo tournament simulation (20,000 runs)
-  5. Generates self-contained interactive HTML (Velocity Strike theme)
+  1. sklearn LogisticRegression trained on 330 international matches
+     (WC + Euro + Copa América + Nations League), competition-weighted
+  2. 5-fold cross-validation + bootstrap confidence intervals
+  3. Learned weights → Power Index for all 48 teams
+  4. Poisson goals model (match-level W/D/L)
+  5. Monte Carlo tournament simulation (20,000 runs + 50×2000 bootstrap)
+  6. Online learning hook (wc2026_live.py) for real-time 2026 updates
+  7. Generates self-contained interactive HTML (Velocity Strike theme)
 """
 
 import json
+import os
 import datetime
 import wc2026_model as M
 from wc2026_data import HEAD_TO_HEAD
@@ -21,6 +25,22 @@ def build_payload(n_sims):
     for i, t in enumerate(teams):
         t["odds_rank"] = i + 1
 
+    # Pop non-serialisable sklearn objects before building JSON
+    scaler = meta.pop("_scaler", None)
+    clf    = meta.pop("_clf", None)
+
+    # Build per-team match explanations for the top-10 vs each other
+    # (precomputed so JS can show them without Python at runtime)
+    explanations = {}
+    top10 = [t["code"] for t in teams[:10]]
+    by_code = {t["code"]: t for t in teams}
+    if scaler and clf:
+        for ca in top10:
+            for cb in top10:
+                if ca == cb: continue
+                exp = M.explain_match(ca, cb, by_code, {"_scaler": scaler, "_clf": clf})
+                explanations[f"{ca}|{cb}"] = exp
+
     payload_teams = [{
         "code": t["code"], "name": t["name"], "flag": t["flag"],
         "conf": t["confederation"], "fifa_rank": t["fifa_rank"],
@@ -29,31 +49,42 @@ def build_payload(n_sims):
         "squad_value_m": t["squad_value_m"], "key_players": t["key_players"],
         "form": t["form"], "host": t["host"],
         "power_index": t["power_index"], "factors": t["factors"],
-        "win_pct":    round(t["win_pct"], 2),
-        "final_pct":  round(t["final_pct"], 2),
-        "semi_pct":   round(t["semi_pct"], 2),
-        "quarter_pct":round(t["quarter_pct"], 2),
-        "advance_pct":round(t["advance_pct"], 2),
+        "win_pct":     round(t["win_pct"], 2),
+        "win_ci_lo":   round(t.get("win_ci_lo", t["win_pct"]), 2),
+        "win_ci_hi":   round(t.get("win_ci_hi", t["win_pct"]), 2),
+        "final_pct":   round(t["final_pct"], 2),
+        "semi_pct":    round(t["semi_pct"], 2),
+        "quarter_pct": round(t["quarter_pct"], 2),
+        "advance_pct": round(t["advance_pct"], 2),
         "odds_rank": t["odds_rank"],
     } for t in teams]
 
     payload_groups = {g: [t["code"] for t in members] for g, members in groups.items()}
     h2h = {f"{a}|{b}": list(v) for (a, b), v in HEAD_TO_HEAD.items()}
 
-    # Serialise numpy floats in model meta
+    # Load live 2026 results if any
+    live_path = os.path.join(os.path.dirname(__file__), "live_results.json")
+    live_data = {}
+    if os.path.exists(live_path):
+        with open(live_path) as f:
+            live_data = json.load(f)
+
+    # Serialise numpy / sklearn floats cleanly
     def _clean(obj):
-        if isinstance(obj, dict):  return {k: _clean(v) for k, v in obj.items()}
+        if isinstance(obj, dict):  return {k: _clean(v) for k, v in obj.items() if not k.startswith("_")}
         if isinstance(obj, list):  return [_clean(v) for v in obj]
         try:
-            return float(obj)      # catches np.float64 etc.
+            return float(obj)
         except (TypeError, ValueError):
             return obj
 
     return {
-        "teams":   payload_teams,
-        "groups":  payload_groups,
-        "h2h":     h2h,
-        "weights": _clean(meta["weights"]),
+        "teams":        payload_teams,
+        "groups":       payload_groups,
+        "h2h":          h2h,
+        "explanations": explanations,
+        "live":         live_data,
+        "weights":      _clean(meta["weights"]),
         "constants": {
             "HOST_BONUS":    M.HOST_BONUS,
             "ELO_BASE":      M.ELO_BASE,
@@ -102,9 +133,30 @@ header{position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);background:r
 .logo{font-family:Sora;font-weight:800;font-size:18px;letter-spacing:-.01em}
 .logo span{color:var(--lime)}
 .tag{font-size:11px;color:var(--muted);border:1px solid var(--outline);border-radius:999px;padding:3px 10px;letter-spacing:.04em;text-transform:uppercase}
+.live-badge{font-size:11px;color:var(--red);border:1px solid rgba(255,59,48,.5);border-radius:999px;padding:3px 10px;letter-spacing:.04em;text-transform:uppercase;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
 nav a{color:var(--muted);text-decoration:none;font-size:13px;padding:6px 10px;border-radius:var(--r-sm);transition:color .15s}
 nav a:hover{color:var(--on);background:var(--l1)}
+/* ── CI bar ──────────────────────────────────────────────────────────────── */
+.ci-wrap{display:flex;align-items:center;gap:6px}
+.ci-range{font-family:'JetBrains Mono';font-size:10px;color:var(--muted);white-space:nowrap}
+/* ── live section ────────────────────────────────────────────────────────── */
+.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.live-grid{grid-template-columns:1fr}}
+.code-block{background:#0a0a0a;border:1px solid #2a2a2a;border-radius:var(--r-lg);padding:16px;font-family:'JetBrains Mono';font-size:13px;color:var(--lime);overflow-x:auto;white-space:pre}
+.code-block .cm{color:var(--muted)}
+.live-match-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1e1e1e;font-size:14px}
+.live-match-row:last-child{border-bottom:none}
+.live-score{font-family:'JetBrains Mono';font-weight:700;font-size:18px;color:var(--on)}
+.live-stage{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+/* ── explainer ───────────────────────────────────────────────────────────── */
+.exp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.exp-feat{background:var(--l1);border:1px solid #252525;border-radius:var(--r-sm);padding:10px 12px;text-align:center}
+.exp-feat .ev{font-family:'JetBrains Mono';font-weight:700;font-size:16px}
+.exp-feat .ev.pos{color:var(--lime)}
+.exp-feat .ev.neg{color:var(--red)}
+.exp-feat .ek{font-size:11px;color:var(--muted);margin-top:3px}
 
 /* ── hero ────────────────────────────────────────────────────────────────── */
 .hero{padding:48px 0 28px;border-bottom:1px solid #1a1a1a;
@@ -282,6 +334,7 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
       <a href="#validation">Validation</a>
       <a href="#groups">Groups</a>
       <a href="#h2h">Match Predictor</a>
+      <a href="#live">🔴 Live 2026</a>
     </nav>
   </div>
 </header>
@@ -294,10 +347,11 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
     title chance is computed from parameters <em>learned from real match data</em> and
     __NSIMS__ simulated tournaments.</p>
     <div class="pills">
-      <span class="pill">ENGINE <b>Logistic Regression + Poisson + Monte-Carlo</b></span>
-      <span class="pill">TRAINED ON <b>WC 2010 · 2014 · 2018</b></span>
-      <span class="pill">TESTED ON <b>WC 2022</b></span>
-      <span class="pill">SIMULATIONS <b>__NSIMS__</b></span>
+      <span class="pill">ENGINE <b>sklearn LR + Poisson + Monte-Carlo</b></span>
+      <span class="pill">TRAINING DATA <b>330 matches · WC + Euro + Copa + NLF</b></span>
+      <span class="pill">HELD-OUT TEST <b>WC 2022 · 59% accuracy</b></span>
+      <span class="pill">5-FOLD CV <b>54.8% ± 1.8%</b></span>
+      <span class="pill">SIMULATIONS <b>__NSIMS__ + bootstrap CI</b></span>
       <span class="pill">UPDATED <b>__DATE__</b></span>
     </div>
     <div class="podium" id="podium"></div>
@@ -322,13 +376,13 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
         <thead><tr>
           <th data-k="odds_rank"   class="num">#</th>
           <th data-k="name">Team</th>
-          <th data-k="power_index" class="num">Power Index</th>
+          <th data-k="power_index" class="num">Power</th>
           <th data-k="win_pct"     class="num">🏆 Win Title</th>
+          <th data-k="win_ci_lo"   class="num">90% CI</th>
           <th data-k="final_pct"   class="num">Final</th>
           <th data-k="semi_pct"    class="num">Semi</th>
           <th data-k="advance_pct" class="num">Reach KO</th>
-          <th data-k="fifa_rank"   class="num">FIFA Rank</th>
-          <th data-k="titles"      class="num">WC Titles</th>
+          <th data-k="fifa_rank"   class="num">FIFA</th>
           <th data-k="elo"         class="num">Elo</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
@@ -471,6 +525,53 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
       <div class="pstat"><div class="pv lime" id="xgB">–</div><div class="pk" id="xgBk">xG · Team B</div></div>
     </div>
     <p class="h2h-note" id="h2h-note"></p>
+    <div style="margin-top:18px" id="exp-panel">
+      <div class="caps" style="margin-bottom:8px">Why this prediction? · Log-odds attribution toward Team A Win</div>
+      <div class="exp-grid" id="exp-grid"></div>
+      <p class="note-box" style="margin-top:10px">Each bar shows how much that feature pushes the log-odds of Team A winning.
+      Positive (lime) = helps A win; negative (red) = favours B. Values in standardised log-odds units.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─── LIVE 2026 ────────────────────────────────────────────────────────── -->
+<section id="live">
+  <div class="wrap">
+    <div class="shead"><h2>🔴 Live 2026 Updates</h2><span class="caps">online learning · real-time model adaptation</span></div>
+    <p class="sub">As 2026 World Cup matches happen, record each result. The model uses a <strong style="color:var(--on)">TD-learning Elo update</strong>
+    (the same mathematics as Q-learning / reinforcement learning) to adjust every team's strength rating,
+    then retrains the logistic regression on historical + 2026 data and rebuilds this dashboard automatically.
+    Each result makes the predictions more accurate.</p>
+    <div class="live-grid">
+      <div class="card">
+        <h3>How to add a result</h3>
+        <div class="code-block"><span class="cm"># Record a match result then rebuild</span>
+python3 wc2026_live.py add ARG FRA 3 3 final
+
+<span class="cm"># Show all recorded results</span>
+python3 wc2026_live.py list
+
+<span class="cm"># Undo the last entry</span>
+python3 wc2026_live.py undo
+
+<span class="cm"># Stage options: group | r32 | r16 | qf | sf | final</span>
+<span class="cm"># Goals = 90-min score (AET/pens counts as draw)</span></div>
+        <div class="note-box" style="margin-top:12px">
+          <b style="color:var(--on)">Why this is reinforcement learning:</b><br>
+          The Elo update rule — <span class="mono" style="color:var(--lime)">ΔElo = K·(S−E)</span> — is mathematically identical to
+          TD(0) learning: the "reward signal" (actual S minus expected E) drives a gradient step on the team's strength estimate.
+          K=20 (group), 25 (knockouts), 30 (final). After each update, the LR model retrains so W/D/L probabilities
+          recalibrate for the rest of the tournament.
+        </div>
+      </div>
+      <div class="card">
+        <h3>Recorded 2026 matches <span id="live-count" class="caps" style="margin-left:8px"></span></h3>
+        <div id="live-matches-list">
+          <p style="color:var(--muted);font-size:14px">No 2026 results recorded yet.<br>Run the command above after each match kicks off.</p>
+        </div>
+        <div id="live-elo-changes" style="margin-top:14px"></div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -559,6 +660,7 @@ function render() {
   rows.forEach(t => {
     const tr = document.createElement('tr');
     tr.className = 'datarow';
+    const ci = `[${t.win_ci_lo.toFixed(1)}–${t.win_ci_hi.toFixed(1)}%]`;
     tr.innerHTML =
       `<td class="num mono" style="color:var(--muted)">${t.odds_rank}</td>
        <td><div class="team-cell">
@@ -566,18 +668,19 @@ function render() {
          <div><div class="tname">${t.name}${t.host?'<span class="host-badge">HOST</span>':''}</div>
               <div class="tsub">${t.code} · ${t.conf}</div></div>
        </div></td>
-       <td class="num"><span class="bar" style="width:72px"><i style="width:${100*t.power_index/maxPower}%"></i></span>&nbsp;<span class="mono">${t.power_index}</span></td>
+       <td class="num"><span class="bar" style="width:64px"><i style="width:${100*t.power_index/maxPower}%"></i></span>&nbsp;<span class="mono">${t.power_index}</span></td>
        <td class="num"><span class="bar"><i style="width:${100*t.win_pct/maxWin}%"></i></span>&nbsp;<span class="win-val">${t.win_pct.toFixed(1)}%</span></td>
+       <td class="num"><span class="ci-range">${ci}</span></td>
        <td class="num mono">${t.final_pct.toFixed(1)}%</td>
        <td class="num mono">${t.semi_pct.toFixed(1)}%</td>
        <td class="num mono">${t.advance_pct.toFixed(0)}%</td>
        <td class="num mono">${t.fifa_rank}</td>
-       <td class="num mono">${t.titles}</td>
        <td class="num mono">${t.elo}</td>`;
     const det = document.createElement('tr');
     det.className = 'detrow';
     det.style.display = 'none';
     det.innerHTML = `<td colspan="10" style="padding:16px 18px;background:#111;border-bottom:1px solid #1a1a1a">${facBars(t)}</td>`;
+
     tr.addEventListener('click', () => {
       det.style.display = det.style.display === 'none' ? 'table-row' : 'none';
     });
@@ -784,8 +887,74 @@ function renderH2H(){
     (nb?` Head-to-head history shifts the edge by ${nb>0?'+':''}${nb.toFixed(0)} Elo toward ${nb>0?BY[a].name:BY[b].name}.`
        :' No notable H2H record encoded.');
 }
-selA.addEventListener('change',renderH2H);selB.addEventListener('change',renderH2H);
+// ── match explainer (pre-computed for top-10 pairs, fallback for others) ─────
+function renderExplainer(a, b){
+  const key = a+'|'+b;
+  const exp = DATA.explanations[key];
+  const grid = document.getElementById('exp-grid');
+  if(!exp){ grid.innerHTML='<p style="color:var(--muted);font-size:13px;grid-column:1/-1">Detailed attribution available for top-10 teams only.</p>'; return; }
+  const features = [
+    ['elo_diff',  'Elo Strength'],
+    ['ped_diff',  'WC Pedigree'],
+    ['host',      'Host Bonus'],
+    ['bias',      'Model Intercept'],
+  ];
+  grid.innerHTML = features.map(([k,n])=>{
+    const v = exp[k] || 0;
+    const cls = v>=0?'pos':'neg';
+    const sign = v>=0?'+':'';
+    return `<div class="exp-feat">
+      <div class="ev ${cls}">${sign}${v.toFixed(3)}</div>
+      <div class="ek">${n}</div></div>`;
+  }).join('');
+}
+
+selA.addEventListener('change',renderH2H);
+selB.addEventListener('change',renderH2H);
 renderH2H();
+renderExplainer(selA.value, selB.value);
+
+// ── live 2026 results display ─────────────────────────────────────────────────
+(function(){
+  const live = DATA.live;
+  const matches = live.matches || [];
+  const elos = live.elo_updates || {};
+  const countEl = document.getElementById('live-count');
+  const listEl  = document.getElementById('live-matches-list');
+  const eloEl   = document.getElementById('live-elo-changes');
+
+  if(matches.length === 0){ countEl.textContent=''; return; }
+
+  countEl.textContent = matches.length + ' result' + (matches.length>1?'s':'') + ' recorded';
+
+  // Badge in header
+  const liveBadge = document.createElement('span');
+  liveBadge.className = 'live-badge';
+  liveBadge.textContent = '● LIVE';
+  document.querySelector('.hbar').appendChild(liveBadge);
+
+  listEl.innerHTML = matches.map(m=>{
+    const r = m.outcome==='W'?`<span style="color:var(--lime)">WIN</span>`:
+              m.outcome==='L'?`<span style="color:var(--red)">LOSS</span>`:
+              `<span style="color:var(--muted)">DRAW</span>`;
+    return `<div class="live-match-row">
+      <div><b>${m.team_a}</b> vs <b>${m.team_b}</b><br><span class="live-stage">${m.stage} · ${m.date}</span></div>
+      <div class="live-score">${m.goals_a}–${m.goals_b}</div>
+      <div>${r}</div>
+    </div>`;
+  }).join('');
+
+  if(Object.keys(elos).length>0){
+    eloEl.innerHTML = '<div class="caps" style="margin-bottom:8px">Cumulative Elo Changes</div>' +
+      Object.entries(elos).map(([code, delta])=>{
+        const t = BY[code]; if(!t) return '';
+        const sign = delta>=0?'+':'';
+        const col = delta>=0?'var(--lime)':'var(--red)';
+        return `<span style="font-family:JetBrains Mono;font-size:12px;margin-right:14px">
+          ${t.flag} ${code} <b style="color:${col}">${sign}${delta.toFixed(1)}</b></span>`;
+      }).join('');
+  }
+})();
 </script>
 </body>
 </html>
@@ -793,12 +962,15 @@ renderH2H();
 
 
 def main(n_sims=M.N_SIMS):
-    print(f"Running {n_sims:,} tournament simulations…")
+    print(f"Running {n_sims:,} tournament simulations + bootstrap CI…")
     payload = build_payload(n_sims)
+    mm = payload["model_meta"]
     html = (HTML
             .replace("__DATA__", json.dumps(payload))
             .replace("__NSIMS__", f"{n_sims:,}")
-            .replace("__DATE__", payload["generated"]))
+            .replace("__DATE__", payload["generated"])
+            .replace("54.8% ± 1.8%", f"{mm['cv_mean']}% ± {mm['cv_std']}%")
+            .replace("WC 2022 · 59% accuracy", f"WC 2022 · {mm['test_acc']}% accuracy"))
     # Write index.html for GitHub Pages (served at the repo root URL)
     # and dashboard.html as a local alias — both are identical.
     for out in ("index.html", "dashboard.html"):

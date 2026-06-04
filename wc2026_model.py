@@ -1,323 +1,294 @@
 """
-FIFA World Cup 2026 — Prediction model.
+FIFA World Cup 2026 — Prediction model  (v2 — sklearn upgrade)
 
-PREDICTION ARCHITECTURE (three-layer pipeline)
-═══════════════════════════════════════════════
+PREDICTION ARCHITECTURE
+═══════════════════════
 
-  Layer 1 — MULTINOMIAL LOGISTIC REGRESSION  (statistical learning)
-  ─────────────────────────────────────────────────────────────────
-  Trained on ~80 real World Cup matches (2010 South Africa, 2014 Brazil,
-  2018 Russia) and tested on ~38 matches from 2022 Qatar (held-out).
-  Features: Elo difference, historical pedigree difference, host flag.
-  Three output classes: Win / Draw / Loss (from team_a's perspective).
-  Algorithm: gradient-descent softmax regression (pure NumPy, no sklearn).
+  LAYER 1 · MULTINOMIAL LOGISTIC REGRESSION  (sklearn, sample-weighted)
+  ──────────────────────────────────────────────────────────────────────
+  Trained on 330 real international matches (WC 2010/14/18,
+  UEFA Euro 2012/16/20, Copa América 2015/19/21/24, Nations League
+  Finals 2020-21 / 2022-23). Competition importance weights (0.6–1.0)
+  down-weight friendlier contests during training.
 
-  What the regression tells us:
-  • The relative magnitude of each learned coefficient → the WEIGHT each
-    feature deserves in the Power Index.
-  • Elo difference consistently dominates (≈45-55% of explanatory power).
-  • Pedigree (WC titles + appearances) contributes a smaller but real signal.
-  • Host advantage is encoded as a flat bonus confirmed by the regression.
+  Features per match (team_a vs team_b):
+    elo_diff    Elo(A) − Elo(B)       primary strength signal
+    ped_diff    Pedigree(A) − Ped(B)  WC titles×8 + WC apps×0.6
+    host        +1/0/−1               home-field flag
+    comp_weight competition weight     passthrough for sample weighting
 
-  Layer 2 — POISSON MATCH MODEL  (match-level probability)
+  Model: sklearn LogisticRegression (multi_class='multinomial',
+         solver='lbfgs', C=5, max_iter=2000).
+  Evaluation: 5-fold stratified cross-validation + held-out WC 2022.
+  Calibration: Brier score (lower = better probability calibration).
+
+  LAYER 2 · POISSON GOALS MODEL  (match-level probability)
   ─────────────────────────────────────────────────────────
-  Converts the effective Elo difference between two teams into expected
-  goals for each side, then enumerates the Poisson joint scoreline
-  distribution to get W/D/L probabilities and the most likely score.
+      λ_A = μ · exp(+γ · Δelo / 400)
+      λ_B = μ · exp(−γ · Δelo / 400)
+  Enumerating the joint scoreline distribution gives W/D/L %
+  and the most likely score.
 
-      λ_A = μ · exp( γ · Δelo / 400 )
-      λ_B = μ · exp(−γ · Δelo / 400 )
-      μ = 1.35 (average WC goals/team/match)
-      γ = 0.85 (goal sensitivity to Elo edge)
+  LAYER 3 · MONTE CARLO TOURNAMENT SIMULATION  (title probability)
+  ────────────────────────────────────────────────────────────────
+  N_SIMS full 48-team / 12-group 2026 brackets.
+  Bootstrap CI: repeat N_BOOT=50 mini-sims (2000 runs each) to get
+  the 90% confidence interval on every team's title %.
 
-  Layer 3 — MONTE CARLO TOURNAMENT SIMULATION  (title probability)
-  ─────────────────────────────────────────────────────────────────
-  Plays the full 48-team / 12-group 2026 bracket N=20,000 times using the
-  Poisson match model. Counts how often each team wins each stage to obtain:
-      Win title % / Reach final % / Reach semi % / Reach QF % / Reach KO %
-
-VALIDATION (train 2010-2018 → test 2022)
-  Baseline (always predict stronger team wins)  ≈ 57%
-  Logistic Regression accuracy on train set     printed at runtime
-  Logistic Regression accuracy on test set      printed at runtime
-
-WEIGHTS (learned, not hand-tuned)
-  The four Power Index weights are derived directly from the logistic
-  regression coefficients (standardised × std → natural-scale importance).
-  Squad value is not available in historical match records so it is fixed at
-  a reasonable 20% allocation, and the remaining 80% is distributed per the
-  regression coefficients for Elo, pedigree, and host.
+  LAYER 4 · ONLINE LEARNING  (wc2026_live.py)
+  ──────────────────────────────────────────────
+  As 2026 matches happen, use wc2026_live.py to record results.
+  Each result triggers an Elo update (TD-learning rule) and a model
+  retrain, so predictions improve throughout the tournament.
 """
 
 import math
+import json
+import os
 import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.metrics import brier_score_loss
 
 from wc2026_data import get_teams, HEAD_TO_HEAD
 from wc2026_history import MATCHES_TRAIN, MATCHES_TEST, get_dataset
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Tunable constants (exposed to the dashboard)
+# Constants
 # ─────────────────────────────────────────────────────────────────────────────
-HOST_BONUS  = 6.0    # flat Power Index bonus for host nations
-ELO_BASE    = 1450.0 # Power Index 0  → this Elo
-ELO_SPAN    = 7.0    # each Power Index point adds this many Elo
-MU          = 1.35   # avg WC goals per team per match
-GAMMA       = 0.85   # goal sensitivity to Elo edge
-H2H_MAX_NUDGE = 25.0 # max Elo nudge from H2H history
-N_SIMS      = 20000  # Monte Carlo runs
-RNG_SEED    = 2026
+HOST_BONUS    = 6.0
+ELO_BASE      = 1450.0
+ELO_SPAN      = 7.0
+MU            = 1.35
+GAMMA         = 0.85
+H2H_MAX_NUDGE = 25.0
+N_SIMS        = 20000
+N_BOOT        = 50       # bootstrap mini-sims for CI  (×2000 runs each)
+BOOT_SIMS     = 2000
+RNG_SEED      = 2026
+CLASSES       = ['W', 'D', 'L']
 
-# These will be overwritten by the trained regression; kept as fallback
-WEIGHTS = {"elo": 0.45, "squad": 0.20, "form": 0.20, "pedigree": 0.15}
+WEIGHTS = {"elo": 0.45, "squad": 0.20, "form": 0.20, "pedigree": 0.15}  # fallback
+
+# Live results file (written by wc2026_live.py)
+LIVE_FILE = os.path.join(os.path.dirname(__file__), "live_results.json")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Layer 1 — Multinomial Logistic Regression (pure NumPy)
+# Layer 1 — sklearn Logistic Regression
 # ─────────────────────────────────────────────────────────────────────────────
-class MultiLogisticRegression:
+def _build_clf():
+    # multi_class='multinomial' deprecated in sklearn 1.5+; it's now the default
+    return LogisticRegression(
+        solver='lbfgs',
+        C=5,
+        max_iter=2000,
+        random_state=42,
+    )
+
+
+def _train_model(live_matches=None):
+    """Fit on historical + optional live 2026 data.
+
+    Returns: (scaler, clf, X_tr_raw, y_tr, sw_tr,
+               X_te_raw, y_te, cv_scores, feat_names)
     """
-    3-class (W / D / L) softmax regression trained with gradient descent.
+    # comp_weight is used ONLY as sample_weight (not as a feature)
+    # Features are: elo_diff, ped_diff, host  (3 cols)
+    X_all, y_tr, sw_tr, _, _ = get_dataset()
+    X_tr = [[x[0], x[1], x[2]] for x in X_all]   # drop comp_weight column
 
-    Features (3 columns):
-      [0] elo_diff  : team_a Elo − team_b Elo
-      [1] ped_diff  : team_a pedigree − team_b pedigree
-      [2] host      : +1 / 0 / -1
+    # Append live 2026 matches (WC weight = 1.0)
+    if live_matches:
+        for m in live_matches:
+            X_tr.append([m['elo_diff'], m['ped_diff'], m.get('host', 0)])
+            y_tr.append(m['outcome'])
+            sw_tr.append(1.0)
 
-    Classes: 0=Win  1=Draw  2=Loss  (from team_a perspective)
+    # Test set (WC 2022 — held-out, always, 3 features)
+    X_te = [[m['elo_diff'], m['ped_diff'], m.get('host', 0)]
+            for m in MATCHES_TEST]
+    y_te = [m['outcome'] for m in MATCHES_TEST]
+
+    # Scale features (fit on train only)
+    scaler = StandardScaler()
+    Xs_tr = scaler.fit_transform(np.array(X_tr, dtype=float))
+    Xs_te = scaler.transform(np.array(X_te, dtype=float))
+
+    # Stratified 5-fold CV on training data
+    clf_cv = _build_clf()
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    # sklearn 1.4+ uses params= dict; older uses fit_params= dict
+    # Use manual CV loop to pass sample_weight reliably across versions
+    from sklearn.model_selection import StratifiedKFold as _SKF
+    cv_raw = []
+    for train_idx, val_idx in _SKF(n_splits=5, shuffle=True, random_state=42).split(Xs_tr, y_tr):
+        Xf, Xv = Xs_tr[train_idx], Xs_tr[val_idx]
+        yf = [y_tr[i] for i in train_idx]
+        yv = [y_tr[i] for i in val_idx]
+        swf = np.array(sw_tr)[train_idx]
+        clf_fold = _build_clf()
+        clf_fold.fit(Xf, yf, sample_weight=swf)
+        cv_raw.append(clf_fold.score(Xv, yv))
+    cv_raw = np.array(cv_raw)
+
+    # Final fit on all training data
+    clf = _build_clf()
+    clf.fit(Xs_tr, y_tr, sample_weight=np.array(sw_tr))
+
+    feat_names = ['elo_diff', 'ped_diff', 'host']
+    return scaler, clf, X_tr, y_tr, sw_tr, X_te, y_te, cv_raw, feat_names
+
+
+def _derive_weights(clf, scaler, feat_names):
     """
-    CLASSES = ['W', 'D', 'L']
+    Convert logistic regression Win-class coefficients into Power Index weights.
 
-    def __init__(self, lr=0.05, n_epochs=5000, l2=0.01):
-        self.lr, self.n_epochs, self.l2 = lr, n_epochs, l2
-        self.W = None   # (n_feat, 3)
-        self.b = None   # (3,)
-        self.mu_  = None
-        self.sig_ = None
-
-    # ── helpers ──────────────────────────────────────────────────────────────
-    @staticmethod
-    def _softmax(z):
-        z = z - z.max(axis=1, keepdims=True)
-        e = np.exp(z)
-        return e / e.sum(axis=1, keepdims=True)
-
-    def _encode(self, y):
-        oh = np.zeros((len(y), 3))
-        for i, yi in enumerate(y):
-            oh[i, self.CLASSES.index(yi)] = 1
-        return oh
-
-    def _standardise(self, X, fit=False):
-        if fit:
-            self.mu_  = X.mean(axis=0)
-            self.sig_ = X.std(axis=0)
-            self.sig_[self.sig_ == 0] = 1.0
-        return (X - self.mu_) / self.sig_
-
-    # ── training ─────────────────────────────────────────────────────────────
-    def fit(self, X_raw, y):
-        X = self._standardise(np.array(X_raw, dtype=float), fit=True)
-        y_oh = self._encode(y)
-        n, d = X.shape
-        self.W = np.zeros((d, 3))
-        self.b = np.zeros(3)
-
-        for epoch in range(self.n_epochs):
-            probs = self._softmax(X @ self.W + self.b)
-            dz = (probs - y_oh) / n
-            dW = X.T @ dz + 2 * self.l2 * self.W / n
-            db = dz.sum(axis=0)
-            lr_t = self.lr / (1 + 0.0003 * epoch)
-            self.W -= lr_t * dW
-            self.b -= lr_t * db
-        return self
-
-    # ── inference ─────────────────────────────────────────────────────────────
-    def predict_proba(self, X_raw):
-        X = self._standardise(np.array(X_raw, dtype=float))
-        return self._softmax(X @ self.W + self.b)
-
-    def predict(self, X_raw):
-        idx = self.predict_proba(X_raw).argmax(axis=1)
-        return [self.CLASSES[i] for i in idx]
-
-    def accuracy(self, X_raw, y):
-        preds = self.predict(X_raw)
-        return sum(p == t for p, t in zip(preds, y)) / len(y)
-
-    def log_loss(self, X_raw, y):
-        probs = self.predict_proba(X_raw)
-        y_oh  = self._encode(y)
-        return -np.mean(np.sum(y_oh * np.log(probs + 1e-9), axis=1))
-
-    # ── weight extraction ─────────────────────────────────────────────────────
-    def feature_importance(self):
-        """
-        Natural-scale importance of each feature toward WINNING.
-        Abs(W[:,0]) × std  gives importance in original units; normalised to sum=1.
-        """
-        coeff = np.abs(self.W[:, 0])          # Win-class coefficients
-        imp   = coeff * self.sig_             # scale back to original feature std
-        total = imp.sum()
-        return imp / total if total > 0 else imp
-
-    def predict_single(self, elo_diff, ped_diff, host):
-        """Return (p_win, p_draw, p_loss) for one match."""
-        p = self.predict_proba([[elo_diff, ped_diff, host]])[0]
-        return float(p[0]), float(p[1]), float(p[2])
-
-
-def _train_model():
-    """Fit the logistic regression on WC 2010-2018 data."""
-    X_tr, y_tr, _, _ = get_dataset()
-    clf = MultiLogisticRegression(lr=0.08, n_epochs=6000, l2=0.005)
-    clf.fit(X_tr, y_tr)
-    return clf, X_tr, y_tr
-
-
-def _derive_weights(clf):
+    The coefficient for comp_weight is excluded (it's a training signal, not a
+    team attribute).  Squad value (not in historical records) is allocated 20%.
+    Form is split from the Elo signal.
     """
-    Translate logistic regression importance into Power Index weights.
+    # Win-class coefficients × feature std → natural-scale importance
+    win_idx = CLASSES.index('W')
+    coef = clf.coef_[win_idx]             # shape (n_feat,)
+    std  = scaler.scale_                  # feature std from training data
+    imp  = np.abs(coef) * std
+    imp_named = dict(zip(feat_names, imp))
 
-    The regression has 3 features: [elo_diff, ped_diff, host].
-    Squad value (not in historical records) is allocated 20% a priori;
-    the other 80% is divided by the learned importances of elo and pedigree
-    (host is excluded from the Power Index and treated as a separate bonus).
-    """
-    imp = clf.feature_importance()
-    elo_imp, ped_imp = imp[0], imp[1]    # ignore host (imp[2])
-    remaining = 0.80                      # 20% reserved for squad
-    denom = elo_imp + ped_imp if (elo_imp + ped_imp) > 0 else 1.0
-    elo_w  = remaining * elo_imp / denom
-    ped_w  = remaining * ped_imp / denom
-    # form is not in the historical features either (pre-tournament form is
-    # hard to reconstruct) → allocate proportionally from elo split
-    form_w = elo_w * 0.40               # roughly 40% of elo's weight
-    elo_w  = elo_w * 0.60
-    squad_w = 0.20
-    total = elo_w + squad_w + form_w + ped_w
+    # Use only elo_diff and ped_diff for the weight split
+    elo_raw = imp_named.get('elo_diff', 1.0)
+    ped_raw = imp_named.get('ped_diff', 0.1)
+    denom   = elo_raw + ped_raw if (elo_raw + ped_raw) > 0 else 1.0
+
+    remaining = 0.80                  # 20% fixed for squad
+    elo_full  = remaining * elo_raw / denom
+    ped_w     = remaining * ped_raw / denom
+    form_w    = elo_full * 0.40       # form carved from elo's share
+    elo_w     = elo_full * 0.60
+
+    total = elo_w + 0.20 + form_w + ped_w
     return {
         "elo":      round(elo_w  / total, 4),
-        "squad":    round(squad_w/ total, 4),
+        "squad":    round(0.20   / total, 4),
         "form":     round(form_w / total, 4),
         "pedigree": round(ped_w  / total, 4),
-    }
+    }, dict(zip(feat_names, [round(float(v), 4) for v in imp]))
 
 
-def _backtest_results(clf):
-    """Per-match backtest for train + test sets, plus per-tournament accuracy."""
-    results = []
+def _match_explanation(scaler, clf, elo_diff, ped_diff, host):
+    """Per-feature log-odds attribution for one match (team_a vs team_b).
+
+    Returns dict: feature → contribution toward P(Win) in log-odds units.
+    """
+    feat_names = ['elo_diff', 'ped_diff', 'host']
+    raw = np.array([[elo_diff, ped_diff, host]])
+    z   = scaler.transform(raw)[0]              # standardised feature vector
+    win_idx = CLASSES.index('W')
+    coef    = clf.coef_[win_idx]
+    contribs = {f: round(float(coef[i] * z[i]), 4) for i, f in enumerate(feat_names)}
+    contribs['bias'] = round(float(clf.intercept_[win_idx]), 4)
+    return contribs
+
+
+def _backtest_rows(scaler, clf):
+    """Per-match backtest for all train + test matches."""
+    feat_names = ['elo_diff', 'ped_diff', 'host', 'comp_weight']
+    rows = []
     for pool, split in [(MATCHES_TRAIN, 'train'), (MATCHES_TEST, 'test')]:
         for m in pool:
-            X = [[m['elo_diff'], m['ped_diff'], m['host']]]
-            pw, pd_, pl = clf.predict_single(m['elo_diff'], m['ped_diff'], m['host'])
-            pred = 'W' if pw >= pd_ and pw >= pl else ('D' if pd_ >= pl else 'L')
-            results.append({
-                'year': m['year'], 'label': m['label'],
+            x = [[m['elo_diff'], m['ped_diff'], m.get('host', 0)]]
+            xs = scaler.transform(np.array(x, dtype=float))
+            proba = clf.predict_proba(xs)[0]
+            proba_dict = dict(zip(clf.classes_, proba))
+            pw = proba_dict.get('W', 0)
+            pd_ = proba_dict.get('D', 0)
+            pl  = proba_dict.get('L', 0)
+            pred = max(proba_dict, key=proba_dict.get)
+            rows.append({
+                'year': m['year'], 'tournament': m.get('tournament', 'WC'),
+                'label': m['label'], 'split': split,
                 'actual': m['outcome'], 'predicted': pred,
-                'p_win': round(pw * 100, 1),
+                'p_win':  round(pw  * 100, 1),
                 'p_draw': round(pd_ * 100, 1),
-                'p_loss': round(pl * 100, 1),
+                'p_loss': round(pl  * 100, 1),
                 'correct': int(pred == m['outcome']),
-                'split': split,
             })
-    return results
+    return rows
 
 
-def _tournament_accuracy(backtest_rows):
-    """Per-year and overall accuracy from backtest rows."""
-    by_year = {}
-    for r in backtest_rows:
-        yr = r['year']
-        by_year.setdefault(yr, {'correct': 0, 'total': 0, 'split': r['split']})
-        by_year[yr]['correct'] += r['correct']
-        by_year[yr]['total'] += 1
-    for yr, d in by_year.items():
-        d['accuracy'] = round(100 * d['correct'] / d['total'], 1)
-    train_rows = [r for r in backtest_rows if r['split'] == 'train']
-    test_rows  = [r for r in backtest_rows if r['split'] == 'test']
-    return {
-        'by_year': {str(k): v for k, v in sorted(by_year.items())},
-        'train_acc': round(100 * sum(r['correct'] for r in train_rows) / len(train_rows), 1),
-        'test_acc':  round(100 * sum(r['correct'] for r in test_rows)  / len(test_rows),  1),
-        'n_train':   len(train_rows),
-        'n_test':    len(test_rows),
-        'baseline':  round(100 * sum(
-            1 for r in backtest_rows
-            if (r['p_win'] >= r['p_draw'] and r['p_win'] >= r['p_loss'] and r['actual'] == 'W') or
-               (r['p_win'] <  r['p_draw'] and r['p_win'] <  r['p_loss'] and r['actual'] in ('D','L'))
-        ) / len(backtest_rows), 1),
-    }
+def _brier(scaler, clf, X_raw, y):
+    xs = scaler.transform(np.array([[r[0], r[1], r[2]] for r in X_raw], dtype=float))
+    proba = clf.predict_proba(xs)
+    scores = []
+    for c, idx in zip(clf.classes_, range(len(clf.classes_))):
+        y_bin = [1 if yi == c else 0 for yi in y]
+        scores.append(brier_score_loss(y_bin, proba[:, idx]))
+    return round(float(np.mean(scores)), 4)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Layer 2 — Poisson Match Model
 # ─────────────────────────────────────────────────────────────────────────────
 def _h2h_nudge(code_a, code_b):
-    rec = HEAD_TO_HEAD.get((code_a, code_b))
+    rec  = HEAD_TO_HEAD.get((code_a, code_b))
     flip = 1.0
     if rec is None:
-        rec = HEAD_TO_HEAD.get((code_b, code_a))
+        rec  = HEAD_TO_HEAD.get((code_b, code_a))
         flip = -1.0
     if rec is None:
         return 0.0
     a_w, draws, b_w = rec
     total = a_w + draws + b_w
-    if total == 0:
-        return 0.0
-    return flip * (a_w - b_w) / total * H2H_MAX_NUDGE
+    return 0.0 if total == 0 else flip * (a_w - b_w) / total * H2H_MAX_NUDGE
 
 
 def _lambdas(elo_a, elo_b):
     d = elo_a - elo_b
-    la = MU * math.exp(GAMMA * d / 400.0)
-    lb = MU * math.exp(-GAMMA * d / 400.0)
-    return max(0.15, min(5.0, la)), max(0.15, min(5.0, lb))
+    return (max(0.15, min(5.0, MU * math.exp(GAMMA * d / 400.0))),
+            max(0.15, min(5.0, MU * math.exp(-GAMMA * d / 400.0))))
 
 
-def _poisson_pmf(k, lam):
+def _pmf(k, lam):
     return math.exp(-lam) * lam ** k / math.factorial(k)
 
 
 def match_prediction(team_a, team_b, max_goals=10):
-    elo_a = team_a["eff_elo"] + _h2h_nudge(team_a["code"], team_b["code"])
+    elo_a  = team_a["eff_elo"] + _h2h_nudge(team_a["code"], team_b["code"])
     la, lb = _lambdas(elo_a, team_b["eff_elo"])
-    pa = [_poisson_pmf(i, la) for i in range(max_goals + 1)]
-    pb = [_poisson_pmf(i, lb) for i in range(max_goals + 1)]
+    pa = [_pmf(i, la) for i in range(max_goals + 1)]
+    pb = [_pmf(i, lb) for i in range(max_goals + 1)]
     p_win = p_draw = p_loss = 0.0
     best_score, best_p = (0, 0), 0.0
     for i in range(max_goals + 1):
         for j in range(max_goals + 1):
             p = pa[i] * pb[j]
-            if p > best_p:
-                best_p, best_score = p, (i, j)
-            if i > j:   p_win  += p
+            if p > best_p: best_p, best_score = p, (i, j)
+            if i > j:    p_win  += p
             elif i == j: p_draw += p
             else:        p_loss += p
     tot = p_win + p_draw + p_loss
-    return {
-        "p_win": p_win / tot, "p_draw": p_draw / tot, "p_loss": p_loss / tot,
-        "xg_a": la, "xg_b": lb, "likely_score": best_score,
-    }
+    return {"p_win": p_win/tot, "p_draw": p_draw/tot, "p_loss": p_loss/tot,
+            "xg_a": la, "xg_b": lb, "likely_score": best_score}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Power Index (Feature Engineering)
 # ─────────────────────────────────────────────────────────────────────────────
-def _scale(value, lo, hi):
-    if hi <= lo: return 0.5
-    return max(0.0, min(1.0, (value - lo) / (hi - lo)))
+def _scale(v, lo, hi):
+    return 0.5 if hi <= lo else max(0.0, min(1.0, (v - lo) / (hi - lo)))
 
 
 def compute_power(teams, weights=None):
     if weights is None:
         weights = WEIGHTS
     elos   = [t["elo"] for t in teams]
-    values = [math.sqrt(t["squad_value_m"]) for t in teams]
+    vals   = [math.sqrt(t["squad_value_m"]) for t in teams]
     peds   = [t["titles"] * 8 + t["wc_appearances"] * 0.6 for t in teams]
     elo_lo, elo_hi = min(elos), max(elos)
-    val_lo, val_hi = min(values), max(values)
+    val_lo, val_hi = min(vals), max(vals)
     ped_lo, ped_hi = min(peds), max(peds)
-
     for t in teams:
         elo_n  = _scale(t["elo"], elo_lo, elo_hi)
         val_n  = _scale(math.sqrt(t["squad_value_m"]), val_lo, val_hi)
@@ -332,12 +303,12 @@ def compute_power(teams, weights=None):
         if t["host"]:
             power += HOST_BONUS
         t["factors"] = {
-            "elo": round(elo_n * 100, 1), "squad": round(val_n * 100, 1),
-            "form": round(form_n * 100, 1), "pedigree": round(ped_n * 100, 1),
+            "elo": round(elo_n*100, 1), "squad": round(val_n*100, 1),
+            "form": round(form_n*100, 1), "pedigree": round(ped_n*100, 1),
             "host_bonus": HOST_BONUS if t["host"] else 0.0,
         }
         t["power_index"] = round(power, 1)
-        t["eff_elo"] = ELO_BASE + power * ELO_SPAN
+        t["eff_elo"]     = ELO_BASE + power * ELO_SPAN
     return teams
 
 
@@ -349,8 +320,8 @@ GROUP_LETTERS = [chr(ord("A") + i) for i in range(12)]
 
 def build_groups(teams):
     ordered = sorted(teams, key=lambda t: t["power_index"], reverse=True)
-    pots = [ordered[i * 12:(i + 1) * 12] for i in range(4)]
-    groups = {g: [] for g in GROUP_LETTERS}
+    pots    = [ordered[i*12:(i+1)*12] for i in range(4)]
+    groups  = {g: [] for g in GROUP_LETTERS}
     for p, pot in enumerate(pots):
         order = range(12) if p % 2 == 0 else range(11, -1, -1)
         for slot, gi in enumerate(order):
@@ -363,23 +334,20 @@ def _sim_goals(rng, elo_a, elo_b):
     return int(rng.poisson(la)), int(rng.poisson(lb))
 
 
-def _knockout_winner(rng, a, b):
+def _ko_winner(rng, a, b):
     ga, gb = _sim_goals(rng, a["eff_elo"], b["eff_elo"])
     if ga > gb: return a
     if gb > ga: return b
-    d = a["eff_elo"] - b["eff_elo"]
+    d   = a["eff_elo"] - b["eff_elo"]
     p_a = 0.5 + max(-0.15, min(0.15, d / 400.0 * 0.15))
     return a if rng.random() < p_a else b
 
 
-def simulate(teams, groups, n_sims=N_SIMS, seed=RNG_SEED):
-    rng   = np.random.default_rng(seed)
-    codes = [t["code"] for t in teams]
-    champ = {c: 0 for c in codes}; final   = {c: 0 for c in codes}
-    semi  = {c: 0 for c in codes}; quarter = {c: 0 for c in codes}
+def _simulate_once(rng, group_items, n_sims):
+    codes   = [t["code"] for gm in group_items for t in gm[1]]
+    champ   = {c: 0 for c in codes};  final   = {c: 0 for c in codes}
+    semi    = {c: 0 for c in codes};  quarter = {c: 0 for c in codes}
     advance = {c: 0 for c in codes}
-    group_items = list(groups.items())
-
     for _ in range(n_sims):
         winners, runners, thirds = [], [], []
         for g, members in group_items:
@@ -387,122 +355,196 @@ def simulate(teams, groups, n_sims=N_SIMS, seed=RNG_SEED):
             gd  = {t["code"]: 0 for t in members}
             gf  = {t["code"]: 0 for t in members}
             for i in range(4):
-                for j in range(i + 1, 4):
+                for j in range(i+1, 4):
                     a, b = members[i], members[j]
                     ga, gb = _sim_goals(rng, a["eff_elo"], b["eff_elo"])
                     gf[a["code"]] += ga; gf[b["code"]] += gb
-                    gd[a["code"]] += ga - gb; gd[b["code"]] += gb - ga
+                    gd[a["code"]] += ga-gb; gd[b["code"]] += gb-ga
                     if ga > gb:   pts[a["code"]] += 3
                     elif gb > ga: pts[b["code"]] += 3
-                    else: pts[a["code"]] += 1; pts[b["code"]] += 1
-            ranked = sorted(
-                members,
+                    else:         pts[a["code"]] += 1; pts[b["code"]] += 1
+            ranked = sorted(members,
                 key=lambda t: (pts[t["code"]], gd[t["code"]], gf[t["code"]], rng.random()),
-                reverse=True
-            )
-            def stats(t): return (pts[t["code"]], gd[t["code"]], gf[t["code"]])
-            winners.append((ranked[0], *stats(ranked[0])))
-            runners.append((ranked[1], *stats(ranked[1])))
-            thirds.append( (ranked[2], *stats(ranked[2])))
-
+                reverse=True)
+            def s(t): return (pts[t["code"]], gd[t["code"]], gf[t["code"]])
+            winners.append((ranked[0], *s(ranked[0])))
+            runners.append((ranked[1], *s(ranked[1])))
+            thirds.append( (ranked[2], *s(ranked[2])))
         thirds.sort(key=lambda x: (x[1], x[2], x[3], rng.random()), reverse=True)
-        qualifiers = [x[0] for x in winners] + [x[0] for x in runners] + [x[0] for x in thirds[:8]]
-        for q in qualifiers: advance[q["code"]] += 1
-
-        seeds = sorted(qualifiers, key=lambda t: t["eff_elo"], reverse=True)
+        quals = [x[0] for x in winners] + [x[0] for x in runners] + [x[0] for x in thirds[:8]]
+        for q in quals: advance[q["code"]] += 1
+        seeds = sorted(quals, key=lambda t: t["eff_elo"], reverse=True)
         n = len(seeds)
-        bracket = [(seeds[i], seeds[n - 1 - i]) for i in range(n // 2)]
-        r16 = [_knockout_winner(rng, a, b) for a, b in bracket]
-        qf_pairs = [(r16[i], r16[i + 1]) for i in range(0, len(r16), 2)]
-        qf = [_knockout_winner(rng, a, b) for a, b in qf_pairs]
+        bracket = [(seeds[i], seeds[n-1-i]) for i in range(n//2)]
+        r16 = [_ko_winner(rng, a, b) for a, b in bracket]
+        qf  = [_ko_winner(rng, r16[i], r16[i+1]) for i in range(0, len(r16), 2)]
         for t in qf: quarter[t["code"]] += 1
-        sf_pairs = [(qf[i], qf[i + 1]) for i in range(0, len(qf), 2)]
-        sf = [_knockout_winner(rng, a, b) for a, b in sf_pairs]
+        sf  = [_ko_winner(rng, qf[i], qf[i+1]) for i in range(0, len(qf), 2)]
         for t in sf: semi[t["code"]] += 1
-        f_pairs = [(sf[i], sf[i + 1]) for i in range(0, len(sf), 2)]
-        finalists = [_knockout_winner(rng, a, b) for a, b in f_pairs]
-        for t in finalists: final[t["code"]] += 1
-        winner = _knockout_winner(rng, finalists[0], finalists[1])
+        fi  = [_ko_winner(rng, sf[i], sf[i+1]) for i in range(0, len(sf), 2)]
+        for t in fi: final[t["code"]] += 1
+        winner = _ko_winner(rng, fi[0], fi[1])
         champ[winner["code"]] += 1
+    return champ, final, semi, quarter, advance
 
-    return {c: {
-        "win_pct":    100.0 * champ[c]   / n_sims,
-        "final_pct":  100.0 * final[c]   / n_sims,
-        "semi_pct":   100.0 * semi[c]    / n_sims,
-        "quarter_pct":100.0 * quarter[c] / n_sims,
-        "advance_pct":100.0 * advance[c] / n_sims,
-    } for c in codes}
+
+def simulate(teams, groups, n_sims=N_SIMS, seed=RNG_SEED, n_boot=N_BOOT, boot_sims=BOOT_SIMS):
+    """Run main simulation + bootstrap for confidence intervals."""
+    rng         = np.random.default_rng(seed)
+    codes       = [t["code"] for t in teams]
+    group_items = list(groups.items())
+
+    # Main run
+    champ, final, semi, quarter, advance = _simulate_once(rng, group_items, n_sims)
+
+    # Bootstrap CI (50 × 2000 runs with different seeds)
+    boot_champ = {c: [] for c in codes}
+    for b in range(n_boot):
+        brng = np.random.default_rng(seed + b + 1)
+        bc, *_ = _simulate_once(brng, group_items, boot_sims)
+        for c in codes:
+            boot_champ[c].append(100.0 * bc[c] / boot_sims)
+
+    stats = {}
+    for c in codes:
+        mean  = 100.0 * champ[c] / n_sims
+        boots = sorted(boot_champ[c])
+        lo    = boots[int(0.05 * n_boot)]
+        hi    = boots[int(0.95 * n_boot)]
+        stats[c] = {
+            "win_pct":    round(mean, 2),
+            "win_ci_lo":  round(lo, 2),
+            "win_ci_hi":  round(hi, 2),
+            "final_pct":  round(100.0 * final[c]   / n_sims, 2),
+            "semi_pct":   round(100.0 * semi[c]    / n_sims, 2),
+            "quarter_pct":round(100.0 * quarter[c] / n_sims, 2),
+            "advance_pct":round(100.0 * advance[c] / n_sims, 2),
+        }
+    return stats
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Orchestration — train → derive weights → simulate
+# Live match Elo updates (online TD-learning)
+# ─────────────────────────────────────────────────────────────────────────────
+def _load_live():
+    """Load recorded 2026 match results from live_results.json."""
+    if not os.path.exists(LIVE_FILE):
+        return [], {}
+    with open(LIVE_FILE) as f:
+        data = json.load(f)
+    return data.get("matches", []), data.get("elo_updates", {})
+
+
+def apply_live_elo(teams, elo_updates):
+    """Apply accumulated Elo updates from live 2026 matches."""
+    by_code = {t["code"]: t for t in teams}
+    for code, delta in elo_updates.items():
+        if code in by_code:
+            by_code[code]["elo"] = by_code[code]["elo"] + delta
+    return teams
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Orchestration
 # ─────────────────────────────────────────────────────────────────────────────
 def run(n_sims=N_SIMS, verbose=False):
     global WEIGHTS
 
-    # 1. Train logistic regression
-    clf, X_tr, y_tr = _train_model()
-    X_te = [[m['elo_diff'], m['ped_diff'], m['host']] for m in MATCHES_TEST]
-    y_te = [m['outcome'] for m in MATCHES_TEST]
+    # Load live 2026 data
+    live_matches, elo_updates = _load_live()
 
-    train_acc = round(clf.accuracy(X_tr, y_tr) * 100, 1)
-    test_acc  = round(clf.accuracy(X_te, y_te)  * 100, 1)
-    train_ll  = round(clf.log_loss(X_tr, y_tr), 4)
-    test_ll   = round(clf.log_loss(X_te, y_te),  4)
+    # 1. Train logistic regression
+    scaler, clf, X_tr, y_tr, sw_tr, X_te, y_te, cv_scores, feat_names = \
+        _train_model(live_matches=live_matches)
+
+    train_acc  = round(clf.score(
+        scaler.transform(np.array(X_tr, dtype=float)), y_tr,
+        sample_weight=np.array(sw_tr)) * 100, 1)
+    test_acc   = round(clf.score(
+        scaler.transform(np.array(X_te, dtype=float)), y_te) * 100, 1)
+    cv_mean    = round(float(cv_scores.mean()) * 100, 1)
+    cv_std     = round(float(cv_scores.std())  * 100, 1)
+    brier_tr   = _brier(scaler, clf, X_tr, y_tr)
+    brier_te   = _brier(scaler, clf, X_te, y_te)
 
     if verbose:
-        print(f"Logistic Regression — train acc: {train_acc}%  test acc: {test_acc}%")
-        print(f"Log-loss: train={train_ll}  test={test_ll}")
+        print(f"LR  train={train_acc}%  cv5={cv_mean}±{cv_std}%  test(WC22)={test_acc}%")
+        print(f"Brier  train={brier_tr}  test={brier_te}  (lower=better)")
 
-    # 2. Derive Power Index weights from regression coefficients
-    WEIGHTS = _derive_weights(clf)
-    imp = clf.feature_importance()   # [elo, ped, host]
-
+    # 2. Derive weights from coefficients
+    WEIGHTS, feat_imp = _derive_weights(clf, scaler, feat_names)
     if verbose:
         print(f"Learned weights: {WEIGHTS}")
 
     # 3. Backtest
-    bt_rows = _backtest_results(clf)
-    bt_stats = _tournament_accuracy(bt_rows)
+    bt_rows  = _backtest_rows(scaler, clf)
+    bt_by_yr = {}
+    for r in bt_rows:
+        yr = str(r['year'])+r.get('tournament','')[:2]
+        bt_by_yr.setdefault(yr, {'correct':0,'total':0,'split':r['split'],'tournament':r.get('tournament','WC')})
+        bt_by_yr[yr]['correct'] += r['correct']
+        bt_by_yr[yr]['total']   += 1
+    for k,v in bt_by_yr.items():
+        v['accuracy'] = round(100*v['correct']/v['total'], 1)
 
-    # 4. Power Index + simulation
-    teams = compute_power(get_teams(), weights=WEIGHTS)
+    # 4. Teams — apply live Elo updates, compute Power Index, simulate
+    teams = get_teams()
+    if elo_updates:
+        teams = apply_live_elo(teams, elo_updates)
+    teams  = compute_power(teams, weights=WEIGHTS)
     groups = build_groups(teams)
-    stats = simulate(teams, groups, n_sims=n_sims)
+    stats  = simulate(teams, groups, n_sims=n_sims)
     for t in teams:
         t.update(stats[t["code"]])
 
     model_meta = {
-        "type": "Multinomial Logistic Regression (3-class: Win/Draw/Loss) + Poisson Match Model + Monte Carlo Simulation",
-        "train_years": [2010, 2014, 2018],
-        "test_years":  [2022],
-        "n_train": len(X_tr),
-        "n_test":  len(X_te),
-        "train_acc": train_acc,
-        "test_acc":  test_acc,
-        "train_ll": train_ll,
-        "test_ll":  test_ll,
-        "lr_coeffs_win": [round(float(v), 4) for v in clf.W[:, 0]],
-        "lr_feature_importance": [round(float(v), 4) for v in imp],
-        "features": ["elo_diff", "ped_diff", "host"],
-        "classes":  ["Win", "Draw", "Loss"],
-        "n_sims": n_sims,
+        "type": "Multinomial Logistic Regression (sklearn) + Poisson Goals Model + Monte Carlo (Bootstrap CI)",
+        "train_tournaments": ["WC 2010","WC 2014","WC 2018","Euro 2012","Euro 2016",
+                              "Euro 2020","Copa 2015","Copa 2019","Copa 2021","Copa 2024",
+                              "NLF 2020-21","NLF 2022-23"],
+        "test_tournaments": ["WC 2022"],
+        "n_train": len(X_tr), "n_test": len(X_te),
+        "train_acc": train_acc, "test_acc": test_acc,
+        "cv_mean": cv_mean, "cv_std": cv_std,
+        "brier_train": brier_tr, "brier_test": brier_te,
+        "features": feat_names, "classes": CLASSES,
+        "feat_importance": feat_imp,
         "weights": WEIGHTS,
-        "backtest_by_year": bt_stats['by_year'],
-        "backtest_train_acc": bt_stats['train_acc'],
-        "backtest_test_acc":  bt_stats['test_acc'],
+        "n_sims": n_sims, "n_boot": N_BOOT, "boot_sims": BOOT_SIMS,
+        "backtest_by_year": bt_by_yr,
         "backtest_rows": bt_rows,
+        "live_matches_count": len(live_matches),
+        "live_elo_updates": elo_updates,
     }
+
+    # Store scaler+clf on meta for explainability endpoint in dashboard builder
+    model_meta["_scaler"] = scaler
+    model_meta["_clf"]    = clf
+
     return teams, groups, model_meta
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public helper — per-matchup log-odds explanation
+# ─────────────────────────────────────────────────────────────────────────────
+def explain_match(code_a, code_b, teams_by_code, model_meta):
+    """Return feature attributions for A vs B (log-odds toward Win for A)."""
+    a, b = teams_by_code[code_a], teams_by_code[code_b]
+    elo_d = a["elo"] - b["elo"]
+    ped_d = (a["titles"]*8 + a["wc_appearances"]*0.6) - (b["titles"]*8 + b["wc_appearances"]*0.6)
+    host  = (1 if a.get("host") else -1 if b.get("host") else 0)
+    scaler, clf = model_meta["_scaler"], model_meta["_clf"]
+    return _match_explanation(scaler, clf, elo_d, ped_d, host)
 
 
 if __name__ == "__main__":
     teams, groups, meta = run(n_sims=5000, verbose=True)
     teams.sort(key=lambda t: t["win_pct"], reverse=True)
-    print(f"\n{'Team':<16}{'Power':>7}{'Win%':>8}{'Final%':>8}{'Adv%':>8}")
-    print("-" * 55)
+    print(f"\n{'Team':<16}{'Power':>7}{'Win%':>8}{'CI 90%':>14}{'Final%':>8}")
+    print("-" * 60)
     for t in teams[:15]:
+        ci = f"[{t['win_ci_lo']:.1f}–{t['win_ci_hi']:.1f}]"
         print(f"{t['flag']} {t['name']:<13}{t['power_index']:>7}"
-              f"{t['win_pct']:>7.1f}%{t['final_pct']:>7.1f}%{t['advance_pct']:>7.0f}%")
-    print(f"\nLearned weights: {meta['weights']}")
-    print(f"Backtest by year: { {k: v['accuracy'] for k, v in meta['backtest_by_year'].items()} }")
+              f"{t['win_pct']:>7.1f}%{ci:>14}{t['final_pct']:>7.1f}%")
+    print(f"\nCV 5-fold: {meta['cv_mean']}% ± {meta['cv_std']}%")
+    print(f"Test (WC22): {meta['test_acc']}%  Brier test: {meta['brier_test']}")
