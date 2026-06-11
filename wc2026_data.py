@@ -25,25 +25,24 @@ HOSTS = {"USA", "MEX", "CAN"}
 # code: (name, flag, confederation, fifa_rank, elo, titles, wc_appearances,
 #        squad_value_m, [key players], form)
 TEAMS = {
-    "ARG": ("Argentina",   "🇦🇷", "CONMEBOL", 1,  2105, 3, 18, 1180, ["Lautaro Martínez", "Julián Álvarez", "Enzo Fernández"], "WWWDWWLWWW"),
-    "FRA": ("France",       "🇫🇷", "UEFA",     2,  2085, 2, 16, 1300, ["Kylian Mbappé", "Ousmane Dembélé", "Aurélien Tchouaméni"], "WWLWWWDWWW"),
-    "SPA": ("Spain",        "🇪🇸", "UEFA",     3,  2060, 1, 16, 1150, ["Lamine Yamal", "Rodri", "Nico Williams"], "WWWWDWWWWL"),
-    "BRA": ("Brazil",       "🇧🇷", "CONMEBOL", 4,  2040, 5, 22, 1100, ["Vinícius Jr", "Rodrygo", "Raphinha"], "WLWWDWWLWW"),
-    "ENG": ("England",      "🏴",  "UEFA",     5,  2015, 1, 16, 1250, ["Jude Bellingham", "Harry Kane", "Bukayo Saka"], "WWDWWLWDWW"),
-    "POR": ("Portugal",     "🇵🇹", "UEFA",     6,  2005, 0, 8,  1080, ["Cristiano Ronaldo", "Bruno Fernandes", "Rafael Leão"], "WWWLWWDWWW"),
-    "NED": ("Netherlands",  "🇳🇱", "UEFA",     7,  1985, 0, 11, 980,  ["Virgil van Dijk", "Cody Gakpo", "Frenkie de Jong"], "WDWWLWWDWW"),
-    "BEL": ("Belgium",      "🇧🇪", "UEFA",     8,  1955, 0, 14, 820,  ["Kevin De Bruyne", "Jérémy Doku", "Romelu Lukaku"], "WLWWDWLWWD"),
-    "GER": ("Germany",      "🇩🇪", "UEFA",     9,  1965, 4, 20, 1000, ["Jamal Musiala", "Florian Wirtz", "Kai Havertz"], "WWLWWDWWLW"),
-    "ITA": ("Italy",        "🇮🇹", "UEFA",     10, 1945, 4, 18, 760,  ["Gianluigi Donnarumma", "Federico Chiesa", "Nicolò Barella"], "WDWLWWWDLW"),
-    "CRO": ("Croatia",      "🇭🇷", "UEFA",     11, 1925, 0, 6,  520,  ["Luka Modrić", "Joško Gvardiol", "Mateo Kovačić"], "WLWWDWLWWD"),
-    "URU": ("Uruguay",      "🇺🇾", "CONMEBOL", 12, 1930, 2, 14, 560,  ["Federico Valverde", "Darwin Núñez", "Ronald Araújo"], "WWDWLWWWDL"),
-    "COL": ("Colombia",     "🇨🇴", "CONMEBOL", 13, 1915, 0, 6,  490,  ["Luis Díaz", "James Rodríguez", "Jhon Durán"], "WWDLWWDWWL"),
-    "MAR": ("Morocco",      "🇲🇦", "CAF",      14, 1900, 0, 6,  420,  ["Achraf Hakimi", "Brahim Díaz", "Hakim Ziyech"], "WWWDLWWWDW"),
-    "USA": ("USA",          "🇺🇸", "CONCACAF", 15, 1860, 0, 11, 380,  ["Christian Pulisic", "Weston McKennie", "Gio Reyna"], "WWDLWWDLWW"),
-    "MEX": ("Mexico",       "🇲🇽", "CONCACAF", 16, 1840, 0, 17, 300,  ["Santiago Giménez", "Edson Álvarez", "Hirving Lozano"], "WDWWLDWWLW"),
+    "ARG": ("Argentina",   "🇦🇷", "CONMEBOL", 1,  2105, 3, 18, 1180, ["Lionel Messi", "Lautaro Martínez", "Julián Álvarez"], "WWWWWWWLWD"),
+    "FRA": ("France",       "🇫🇷", "UEFA",     2,  2085, 2, 16, 1300, ["Kylian Mbappé", "Ousmane Dembélé", "Michael Olise"], "WLWWWWDWWW"),
+    "SPA": ("Spain",        "🇪🇸", "UEFA",     3,  2070, 1, 16, 1150, ["Lamine Yamal", "Rodri", "Nico Williams"], "WDDWDWWWWW"),
+    "BRA": ("Brazil",       "🇧🇷", "CONMEBOL", 4,  2010, 5, 22, 1100, ["Vinícius Jr", "Raphinha", "Matheus Cunha"], "WWWLLWLWWD"),
+    "ENG": ("England",      "🏴",  "UEFA",     5,  2030, 1, 16, 1250, ["Jude Bellingham", "Harry Kane", "Bukayo Saka"], "WWLDWWWWWW"),
+    "POR": ("Portugal",     "🇵🇹", "UEFA",     6,  2015, 0, 8,  1080, ["Cristiano Ronaldo", "Bruno Fernandes", "Rafael Leão"], "WWWDWLDWWW"),
+    "NED": ("Netherlands",  "🇳🇱", "UEFA",     7,  1975, 0, 11, 980,  ["Virgil van Dijk", "Cody Gakpo", "Frenkie de Jong"], "WLDWWDWWWD"),
+    "BEL": ("Belgium",      "🇧🇪", "UEFA",     8,  1965, 0, 14, 820,  ["Kevin De Bruyne", "Jérémy Doku", "Romelu Lukaku"], "WWDWWDWDWW"),
+    "GER": ("Germany",      "🇩🇪", "UEFA",     9,  1975, 4, 20, 1000, ["Jamal Musiala", "Florian Wirtz", "Kai Havertz"], "WWWWWWLWWL"),
+    "CRO": ("Croatia",      "🇭🇷", "UEFA",     11, 1925, 0, 6,  520,  ["Luka Modrić", "Joško Gvardiol", "Mateo Kovačić"], "WLLWWWWDWW"),
+    "URU": ("Uruguay",      "🇺🇾", "CONMEBOL", 12, 1900, 2, 14, 560,  ["Federico Valverde", "Darwin Núñez", "Ronald Araújo"], "DDDLDWWDWW"),
+    "COL": ("Colombia",     "🇨🇴", "CONMEBOL", 13, 1915, 0, 6,  490,  ["Luis Díaz", "James Rodríguez", "Jhon Durán"], "WWLLWWDWWW"),
+    "MAR": ("Morocco",      "🇲🇦", "CAF",      14, 1920, 0, 6,  420,  ["Achraf Hakimi", "Brahim Díaz", "Azzedine Ounahi"], "DDLDWWWDWW"),
+    "USA": ("USA",          "🇺🇸", "CONCACAF", 15, 1845, 0, 11, 380,  ["Christian Pulisic", "Weston McKennie", "Gio Reyna"], "LWLLWWWDWL"),
+    "MEX": ("Mexico",       "🇲🇽", "CONCACAF", 16, 1860, 0, 17, 300,  ["Santiago Giménez", "Edson Álvarez", "Hirving Lozano"], "WWWDDWWWLD"),
     "SUI": ("Switzerland",  "🇨🇭", "UEFA",     17, 1875, 0, 12, 420,  ["Granit Xhaka", "Manuel Akanji", "Dan Ndoye"], "WDWLWWDWLW"),
     "DEN": ("Denmark",      "🇩🇰", "UEFA",     18, 1880, 0, 6,  450,  ["Rasmus Højlund", "Pierre-Emile Højbjerg", "Christian Eriksen"], "WWLWDWWLWD"),
-    "JPN": ("Japan",        "🇯🇵", "AFC",      19, 1870, 0, 7,  340,  ["Takefusa Kubo", "Kaoru Mitoma", "Wataru Endo"], "WWWDWWLWWD"),
+    "JPN": ("Japan",        "🇯🇵", "AFC",      19, 1890, 0, 7,  340,  ["Takefusa Kubo", "Ritsu Doan", "Wataru Endo"], "WWWWWWDLDW"),
     "SEN": ("Senegal",      "🇸🇳", "CAF",      20, 1865, 0, 4,  380,  ["Sadio Mané", "Nicolas Jackson", "Pape Sarr"], "WWDLWWWDLW"),
     "IRN": ("Iran",         "🇮🇷", "AFC",      21, 1810, 0, 6,  120,  ["Mehdi Taremi", "Alireza Jahanbakhsh", "Sardar Azmoun"], "WWDWLWDWWL"),
     "KOR": ("South Korea",  "🇰🇷", "AFC",      22, 1840, 0, 11, 280,  ["Son Heung-min", "Lee Kang-in", "Kim Min-jae"], "WDWWLWDWWL"),
@@ -56,10 +55,11 @@ TEAMS = {
     "NGA": ("Nigeria",      "🇳🇬", "CAF",      29, 1790, 0, 6,  340,  ["Victor Osimhen", "Ademola Lookman", "Alex Iwobi"], "WDWWLWDWLW"),
     "CAN": ("Canada",       "🇨🇦", "CONCACAF", 30, 1780, 0, 2,  260,  ["Alphonso Davies", "Jonathan David", "Stephen Eustáquio"], "WDLWWDWWLD"),
     "EGY": ("Egypt",        "🇪🇬", "CAF",      31, 1770, 0, 3,  220,  ["Mohamed Salah", "Omar Marmoush", "Mohamed Elneny"], "WWDWLWWDLW"),
-    "NOR": ("Norway",       "🇳🇴", "UEFA",     32, 1815, 0, 3,  520,  ["Erling Haaland", "Martin Ødegaard", "Alexander Sørloth"], "WWWDLWWWDL"),
+    "NOR": ("Norway",       "🇳🇴", "UEFA",     32, 1855, 0, 4,  520,  ["Erling Haaland", "Martin Ødegaard", "Alexander Sørloth"], "DWLWWWWWWW"),
     "POL": ("Poland",       "🇵🇱", "UEFA",     33, 1760, 0, 9,  300,  ["Robert Lewandowski", "Piotr Zieliński", "Nicola Zalewski"], "WDLWDWLWDW"),
     "SWE": ("Sweden",       "🇸🇪", "UEFA",     34, 1755, 0, 12, 360,  ["Alexander Isak", "Viktor Gyökeres", "Dejan Kulusevski"], "WWDLWWDLWW"),
-    "WAL": ("Wales",        "🏴",  "UEFA",     35, 1730, 0, 2,  190,  ["Harry Wilson", "Brennan Johnson", "Daniel James"], "DWLDWWLWDL"),
+    "SCO": ("Scotland",     "🏴", "UEFA",    35, 1845, 0, 9,  350,  ["Scott McTominay", "Andrew Robertson", "John McGinn"], "WWDWWLWDWW"),
+    "BIH": ("Bosnia-Herz.", "🇧🇦", "UEFA",     36, 1820, 0, 2,  180,  ["Edin Džeko", "Ermedin Demirović", "Anel Ahmedhodžić"], "DWWDWLWDWD"),
     "CIV": ("Ivory Coast",  "🇨🇮", "CAF",      36, 1745, 0, 3,  280,  ["Sébastien Haller", "Franck Kessié", "Simon Adingra"], "WWDLWWDWLD"),
     "ALG": ("Algeria",      "🇩🇿", "CAF",      37, 1740, 0, 4,  260,  ["Riyad Mahrez", "Ismaël Bennacer", "Saïd Benrahma"], "WDWWLDWWLW"),
     "PAR": ("Paraguay",     "🇵🇾", "CONMEBOL", 38, 1735, 0, 8,  190,  ["Miguel Almirón", "Julio Enciso", "Antonio Sanabria"], "DWWLDWLWWD"),
@@ -98,6 +98,64 @@ HEAD_TO_HEAD = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Injury / availability status going into the June 2026 tournament.
+# code -> {"out": [(player, importance)], "doubtful": [(player, importance)],
+#          "availability": 0-100}
+# availability = % of the first-choice XI fully fit (100 = everyone fit).
+# Teams not listed default to 100 (no notable injury news found).
+# Populated from injury-news research; importance: "star" | "key" | "squad".
+# ---------------------------------------------------------------------------
+INJURIES = {
+    # Researched June 2026 (web sources; availability = % of first-XI fully fit)
+    "ARG": {"availability": 88,
+            "out": [("Leonardo Balerdi", "squad"), ("Juan Foyth", "squad")],
+            "doubtful": [("Nahuel Molina", "key")]},
+    "FRA": {"availability": 88,
+            "out": [("Hugo Ekitike", "key"), ("Eduardo Camavinga", "squad"),
+                    ("Boubacar Kamara", "squad")],
+            "doubtful": [("William Saliba", "key")]},
+    "SPA": {"availability": 78,
+            "out": [("Fermín López", "key"), ("Dani Carvajal", "key")],
+            "doubtful": [("Lamine Yamal", "star"), ("Mikel Merino", "key")]},
+    "BRA": {"availability": 72,
+            "out": [("Rodrygo", "star"), ("Éder Militão", "key"), ("Estêvão", "star")],
+            "doubtful": [("Neymar", "key")]},
+    "ENG": {"availability": 90,
+            "out": [("Jack Grealish", "squad"), ("Tino Livramento", "squad")],
+            "doubtful": [("Reece James", "key")]},
+    "POR": {"availability": 100, "out": [], "doubtful": []},
+    "GER": {"availability": 85,
+            "out": [("Serge Gnabry", "key"), ("Lennart Karl", "key")],
+            "doubtful": [("Manuel Neuer", "key")]},
+    "NED": {"availability": 68,
+            "out": [("Jurriën Timber", "key"), ("Xavi Simons", "key"),
+                    ("Jerdy Schouten", "key"), ("Matthijs de Ligt", "key")],
+            "doubtful": []},
+    "BEL": {"availability": 85, "out": [],
+            "doubtful": [("Romelu Lukaku", "key")]},
+    "CRO": {"availability": 92, "out": [], "doubtful": []},
+    "URU": {"availability": 78, "out": [],
+            "doubtful": [("José María Giménez", "key"),
+                         ("Giorgian de Arrascaeta", "key"),
+                         ("Darwin Núñez", "key")]},
+    "MAR": {"availability": 95, "out": [], "doubtful": []},
+    "USA": {"availability": 80,
+            "out": [("Johnny Cardoso", "key"), ("Patrick Agyemang", "squad")],
+            "doubtful": [("Chris Richards", "key")]},
+    "MEX": {"availability": 80,
+            "out": [("Luis Ángel Malagón", "key"), ("Marcel Ruiz", "squad")],
+            "doubtful": [("Edson Álvarez", "key")]},
+    "JPN": {"availability": 80,
+            "out": [("Kaoru Mitoma", "star"), ("Takumi Minamino", "key")],
+            "doubtful": []},
+    "COL": {"availability": 97, "out": [], "doubtful": []},
+    "NOR": {"availability": 93, "out": [], "doubtful": []},
+}
+
+DEFAULT_AVAILABILITY = 100
+
+
 def normalize_form(form_str):
     """Return points from last-10 form string (W=3, D=1, L=0), max 30."""
     pts = {"W": 3, "D": 1, "L": 0}
@@ -109,6 +167,7 @@ def get_teams():
     out = []
     for code, t in TEAMS.items():
         name, flag, conf, rank, elo, titles, apps, value, players, form = t
+        inj = INJURIES.get(code, {})
         out.append({
             "code": code,
             "name": name,
@@ -123,5 +182,8 @@ def get_teams():
             "form": form,
             "form_points": normalize_form(form),
             "host": code in HOSTS,
+            "availability": inj.get("availability", DEFAULT_AVAILABILITY),
+            "injuries_out": inj.get("out", []),
+            "injuries_doubtful": inj.get("doubtful", []),
         })
     return out

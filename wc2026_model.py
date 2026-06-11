@@ -70,7 +70,15 @@ BOOT_SIMS     = 2000
 RNG_SEED      = 2026
 CLASSES       = ['W', 'D', 'L']
 
-WEIGHTS = {"elo": 0.45, "squad": 0.20, "form": 0.20, "pedigree": 0.15}  # fallback
+# Fallback weights (overwritten by the trained regression at run time)
+WEIGHTS = {"elo": 0.40, "squad": 0.18, "form": 0.20, "pedigree": 0.12,
+           "availability": 0.10}
+
+# Balance regularisation: learned weights are clipped to these bands so no
+# single factor dominates ("fine balance"). Excess pedigree weight is
+# redistributed to recent form.
+PEDIGREE_CAP      = 0.12   # max share for historical pedigree
+AVAILABILITY_WGT  = 0.10   # fixed share for injury/availability signal
 
 # Live results file (written by wc2026_live.py)
 LIVE_FILE = os.path.join(os.path.dirname(__file__), "live_results.json")
@@ -169,11 +177,22 @@ def _derive_weights(clf, scaler, feat_names):
     elo_w     = elo_full * 0.60
 
     total = elo_w + 0.20 + form_w + ped_w
+    elo_w, squad_w = elo_w / total, 0.20 / total
+    form_w, ped_w  = form_w / total, ped_w / total
+
+    # Balance regularisation: cap pedigree, excess flows to recent form.
+    if ped_w > PEDIGREE_CAP:
+        form_w += ped_w - PEDIGREE_CAP
+        ped_w   = PEDIGREE_CAP
+
+    # Carve a fixed share for injury/availability from all factors pro-rata.
+    scale = 1.0 - AVAILABILITY_WGT
     return {
-        "elo":      round(elo_w  / total, 4),
-        "squad":    round(0.20   / total, 4),
-        "form":     round(form_w / total, 4),
-        "pedigree": round(ped_w  / total, 4),
+        "elo":          round(elo_w   * scale, 4),
+        "squad":        round(squad_w * scale, 4),
+        "form":         round(form_w  * scale, 4),
+        "pedigree":     round(ped_w   * scale, 4),
+        "availability": round(AVAILABILITY_WGT, 4),
     }, dict(zip(feat_names, [round(float(v), 4) for v in imp]))
 
 
@@ -290,21 +309,27 @@ def compute_power(teams, weights=None):
     val_lo, val_hi = min(vals), max(vals)
     ped_lo, ped_hi = min(peds), max(peds)
     for t in teams:
-        elo_n  = _scale(t["elo"], elo_lo, elo_hi)
-        val_n  = _scale(math.sqrt(t["squad_value_m"]), val_lo, val_hi)
-        form_n = t["form_points"] / 30.0
-        ped_n  = _scale(t["titles"] * 8 + t["wc_appearances"] * 0.6, ped_lo, ped_hi)
-        power  = 100.0 * (
+        elo_n   = _scale(t["elo"], elo_lo, elo_hi)
+        val_n   = _scale(math.sqrt(t["squad_value_m"]), val_lo, val_hi)
+        form_n  = t["form_points"] / 30.0
+        ped_n   = _scale(t["titles"] * 8 + t["wc_appearances"] * 0.6, ped_lo, ped_hi)
+        # Availability uses an absolute scale (not field-relative): a team
+        # missing 15% of its first-choice XI scores 0.85 here regardless of
+        # how injured the rest of the field is.
+        avail_n = t.get("availability", 100) / 100.0
+        power   = 100.0 * (
             weights["elo"]      * elo_n  +
             weights["squad"]    * val_n  +
             weights["form"]     * form_n +
-            weights["pedigree"] * ped_n
+            weights["pedigree"] * ped_n  +
+            weights.get("availability", 0.0) * avail_n
         )
         if t["host"]:
             power += HOST_BONUS
         t["factors"] = {
             "elo": round(elo_n*100, 1), "squad": round(val_n*100, 1),
             "form": round(form_n*100, 1), "pedigree": round(ped_n*100, 1),
+            "availability": round(avail_n*100, 1),
             "host_bonus": HOST_BONUS if t["host"] else 0.0,
         }
         t["power_index"] = round(power, 1)

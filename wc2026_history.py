@@ -128,6 +128,24 @@ _ELO = {
     'nlf2023': {
         'CRO':1930,'NED':1945,'ESP':1965,'ITA':1950,
     },
+    # ── UEFA Euro 2024 (Germany) ─────────────────────────────────────────────
+    'euro2024': {
+        'ESP':2000,'GER':1950,'FRA':1990,'ENG':1985,'POR':1950,'NED':1945,
+        'BEL':1945,'ITA':1925,'SUI':1900,'AUT':1885,'TUR':1870,'CRO':1915,
+        'DEN':1895,'POL':1860,'UKR':1865,'CZE':1860,'SVK':1850,'SVN':1845,
+        'SRB':1860,'ROU':1840,'GEO':1795,'ALB':1790,'SCO':1850,'HUN':1855,
+    },
+    # ── UEFA Nations League Finals 2024-25 (June 2025, Germany) ─────────────
+    'nlf2025': {
+        'POR':1995,'ESP':2015,'FRA':2005,'GER':1955,
+    },
+    # ── WC 2026 European qualifiers / playoffs (2025 – Mar 2026) ────────────
+    'wcq2025': {
+        'NOR':1850,'ITA':1925,'SVK':1850,'GER':1960,'NED':1970,'POL':1865,
+        'TUR':1875,'ESP':2065,'ISR':1780,'SRB':1855,'ENG':2020,'BEL':1960,
+        'MKD':1790,'ISL':1795,'FRA':2080,'IRL':1805,'POR':2010,'UKR':1860,
+        'SCO':1845,'DEN':1890,'NIR':1775,'BIH':1820,
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -229,6 +247,25 @@ _PED = {
     'nlf2023': {
         'CRO':0+6*0.6,  'NED':0+11*0.6, 'ESP':1*8+16*0.6, 'ITA':4*8+18*0.6,
     },
+    'euro2024': {
+        'ESP':1*8+16*0.6, 'GER':4*8+20*0.6, 'FRA':2*8+16*0.6, 'ENG':1*8+16*0.6,
+        'POR':0+8*0.6,    'NED':0+11*0.6,   'BEL':0+14*0.6,   'ITA':4*8+18*0.6,
+        'SUI':0+12*0.6,   'AUT':0+8*0.6,    'TUR':0+2*0.6,    'CRO':0+6*0.6,
+        'DEN':0+6*0.6,    'POL':0+9*0.6,    'UKR':0+1*0.6,    'CZE':0+9*0.6,
+        'SVK':0+1*0.6,    'SVN':0+2*0.6,    'SRB':0+13*0.6,   'ROU':0+7*0.6,
+        'GEO':0.0,        'ALB':0.0,        'SCO':0+8*0.6,    'HUN':0+9*0.6,
+    },
+    'nlf2025': {
+        'POR':0+8*0.6, 'ESP':1*8+16*0.6, 'FRA':2*8+16*0.6, 'GER':4*8+20*0.6,
+    },
+    'wcq2025': {
+        'NOR':0+4*0.6,  'ITA':4*8+18*0.6, 'SVK':0+1*0.6,  'GER':4*8+20*0.6,
+        'NED':0+11*0.6, 'POL':0+9*0.6,    'TUR':0+2*0.6,  'ESP':1*8+16*0.6,
+        'ISR':0+1*0.6,  'SRB':0+13*0.6,   'ENG':1*8+16*0.6,'BEL':0+14*0.6,
+        'MKD':0.0,      'ISL':0+1*0.6,    'FRA':2*8+16*0.6,'IRL':0+3*0.6,
+        'POR':0+8*0.6,  'UKR':0+1*0.6,    'SCO':0+8*0.6,  'DEN':0+6*0.6,
+        'NIR':0+3*0.6,  'BIH':0+1*0.6,
+    },
 }
 
 
@@ -270,6 +307,9 @@ def _ca(key, ta, tb, host, outcome):
 
 def _nlf(key, ta, tb, host, outcome):
     return _feat(key, ta, tb, host, outcome, tournament='NLF', comp_weight=0.78)
+
+def _wcq(key, ta, tb, host, outcome):
+    return _feat(key, ta, tb, host, outcome, tournament='WCQ', comp_weight=0.60)
 
 
 # ---------------------------------------------------------------------------
@@ -721,6 +761,79 @@ MATCHES_TRAIN = [
     # Bronze: Croatia vs Netherlands: 2-2 at 90, CRO pens
     _nlf('nlf2023','CRO','NED',  0,'D'),   # 2-2 at 90, CRO pens
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # UEFA Euro 2024 — Germany (verified via web research, June 2026)
+    # ═══════════════════════════════════════════════════════════════════════
+    # Group stage
+    _euro('euro2024','GER','SCO',  1,'W'),   # 5-1 record host opener
+    _euro('euro2024','GER','HUN',  1,'W'),   # 2-0
+    _euro('euro2024','SUI','GER', -1,'D'),   # 1-1, Füllkrug 90+2'
+    _euro('euro2024','ESP','CRO',  0,'W'),   # 3-0
+    _euro('euro2024','ITA','ALB',  0,'W'),   # 2-1
+    _euro('euro2024','ESP','ITA',  0,'W'),   # 1-0
+    _euro('euro2024','ALB','ESP',  0,'L'),   # 0-1
+    _euro('euro2024','CRO','ITA',  0,'D'),   # 1-1, Zaccagni 90+8'
+    _euro('euro2024','SRB','ENG',  0,'L'),   # 0-1
+    _euro('euro2024','DEN','ENG',  0,'D'),   # 1-1
+    _euro('euro2024','ENG','SVN',  0,'D'),   # 0-0
+    _euro('euro2024','POL','NED',  0,'L'),   # 1-2
+    _euro('euro2024','AUT','FRA',  0,'L'),   # 0-1
+    _euro('euro2024','NED','FRA',  0,'D'),   # 0-0
+    _euro('euro2024','POL','AUT',  0,'L'),   # 1-3
+    _euro('euro2024','NED','AUT',  0,'L'),   # 2-3 UPSET — Austria topped group D
+    _euro('euro2024','FRA','POL',  0,'D'),   # 1-1
+    _euro('euro2024','BEL','SVK',  0,'L'),   # 0-1 UPSET
+    _euro('euro2024','ROU','UKR',  0,'W'),   # 3-0
+    _euro('euro2024','POR','CZE',  0,'W'),   # 2-1
+    _euro('euro2024','TUR','POR',  0,'L'),   # 0-3
+    _euro('euro2024','GEO','POR',  0,'W'),   # 2-0 UPSET — debutants beat Portugal
+    # Round of 16
+    _euro('euro2024','SUI','ITA',  0,'W'),   # 2-0
+    _euro('euro2024','GER','DEN',  1,'W'),   # 2-0
+    _euro('euro2024','ENG','SVK',  0,'D'),   # 1-1 at 90 (Bellingham 90+5'), ENG won AET
+    _euro('euro2024','ESP','GEO',  0,'W'),   # 4-1
+    _euro('euro2024','FRA','BEL',  0,'W'),   # 1-0
+    _euro('euro2024','POR','SVN',  0,'D'),   # 0-0, POR won pens
+    _euro('euro2024','ROU','NED',  0,'L'),   # 0-3
+    _euro('euro2024','AUT','TUR',  0,'L'),   # 1-2
+    # Quarter / Semi / Final
+    _euro('euro2024','ESP','GER', -1,'D'),   # 1-1 at 90, ESP won 2-1 AET
+    _euro('euro2024','POR','FRA',  0,'D'),   # 0-0, FRA pens
+    _euro('euro2024','ENG','SUI',  0,'D'),   # 1-1, ENG pens
+    _euro('euro2024','NED','TUR',  0,'W'),   # 2-1
+    _euro('euro2024','ESP','FRA',  0,'W'),   # 2-1 SF (Yamal wonder-goal)
+    _euro('euro2024','NED','ENG',  0,'L'),   # 1-2 SF (Watkins 90')
+    _euro('euro2024','ESP','ENG',  0,'W'),   # 2-1 FINAL — Spain's 4th Euro
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # UEFA Nations League Finals 2024-25 (June 2025, Germany)
+    # ═══════════════════════════════════════════════════════════════════════
+    _nlf('nlf2025','GER','POR',  1,'L'),   # 1-2 SF (Ronaldo 68' winner)
+    _nlf('nlf2025','ESP','FRA',  0,'W'),   # 5-4 SF thriller
+    _nlf('nlf2025','GER','FRA',  1,'L'),   # 0-2 third place
+    _nlf('nlf2025','POR','ESP',  0,'D'),   # 2-2 at 90 & AET, POR won 5-3 pens
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # WC 2026 European qualifiers & playoffs (2025 – Mar 2026)
+    # ═══════════════════════════════════════════════════════════════════════
+    _wcq('wcq2025','NOR','ITA',  1,'W'),   # 3-0 Oslo — Norway's statement win
+    _wcq('wcq2025','SVK','GER',  1,'W'),   # 2-0 — Germany's first away WCQ loss
+    _wcq('wcq2025','NED','POL',  1,'D'),   # 1-1
+    _wcq('wcq2025','TUR','ESP',  1,'L'),   # 0-6 Merino hat-trick
+    _wcq('wcq2025','ISR','ITA',  0,'L'),   # 4-5 nine-goal thriller (neutral)
+    _wcq('wcq2025','SRB','ENG',  1,'L'),   # 0-5
+    _wcq('wcq2025','BEL','MKD',  1,'D'),   # 0-0 — Belgium's stumble
+    _wcq('wcq2025','ISL','FRA',  1,'D'),   # 2-2
+    _wcq('wcq2025','IRL','POR',  1,'W'),   # 2-0 — Ronaldo red card
+    _wcq('wcq2025','FRA','UKR',  1,'W'),   # 4-0 — Mbappé's 400th
+    _wcq('wcq2025','POL','NED',  1,'D'),   # 1-1
+    _wcq('wcq2025','ITA','NOR',  1,'L'),   # 1-4 Milan — Norway qualified
+    _wcq('wcq2025','GER','SVK',  1,'W'),   # 6-0 — Germany sealed top spot
+    _wcq('wcq2025','ESP','TUR',  1,'D'),   # 2-2 — Spain qualified unbeaten
+    _wcq('wcq2025','SCO','DEN',  1,'W'),   # 4-2 — Scotland's first WC since 1998
+    _wcq('wcq2025','ITA','NIR',  1,'W'),   # 2-0 playoff SF (Mar 2026)
+    _wcq('wcq2025','BIH','ITA',  1,'D'),   # 1-1 playoff final at 90; BIH won pens —
+                                           # Italy miss a third straight World Cup
 ]
 
 # ---------------------------------------------------------------------------
@@ -820,7 +933,18 @@ def get_dataset(years=None):
 
     X = [[m['elo_diff'], m['ped_diff'], m['host'], m['comp_weight']] for m in pool]
     y = [m['outcome'] for m in pool]
-    sample_weights = [m['comp_weight'] for m in pool]
+    # Sample weight = competition importance × recency decay.
+    # Recency: half-life of RECENCY_HALF_LIFE years relative to 2026, so a
+    # 2024 Euro match counts ~5x more than a 2010 WC match. This keeps recent
+    # European/South American results dominant without discarding old data.
+    sample_weights = [
+        m['comp_weight'] * 0.5 ** ((2026 - m['year']) / RECENCY_HALF_LIFE)
+        for m in pool
+    ]
     labels = [m['label'] for m in pool]
     years_out = [m['year'] for m in pool]
     return X, y, sample_weights, labels, years_out
+
+
+# Recency half-life (years) for training sample weights
+RECENCY_HALF_LIFE = 7.0

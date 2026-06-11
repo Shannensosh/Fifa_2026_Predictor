@@ -48,6 +48,9 @@ def build_payload(n_sims):
         "titles": t["titles"], "wc_appearances": t["wc_appearances"],
         "squad_value_m": t["squad_value_m"], "key_players": t["key_players"],
         "form": t["form"], "host": t["host"],
+        "availability": t.get("availability", 100),
+        "injuries_out": t.get("injuries_out", []),
+        "injuries_doubtful": t.get("injuries_doubtful", []),
         "power_index": t["power_index"], "factors": t["factors"],
         "win_pct":     round(t["win_pct"], 2),
         "win_ci_lo":   round(t.get("win_ci_lo", t["win_pct"]), 2),
@@ -348,9 +351,10 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
     __NSIMS__ simulated tournaments.</p>
     <div class="pills">
       <span class="pill">ENGINE <b>sklearn LR + Poisson + Monte-Carlo</b></span>
-      <span class="pill">TRAINING DATA <b>330 matches · WC + Euro + Copa + NLF</b></span>
+      <span class="pill">TRAINING DATA <b>__NTRAIN__ matches · WC + Euro + Copa + NLF + WCQ</b></span>
       <span class="pill">HELD-OUT TEST <b>WC 2022 · 59% accuracy</b></span>
       <span class="pill">5-FOLD CV <b>54.8% ± 1.8%</b></span>
+      <span class="pill">INJURY DATA <b>June 2026 squad news</b></span>
       <span class="pill">SIMULATIONS <b>__NSIMS__ + bootstrap CI</b></span>
       <span class="pill">UPDATED <b>__DATE__</b></span>
     </div>
@@ -441,9 +445,11 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
           <b>Elo rating</b> — overall strength from match history.<br>
           <b>Squad value &amp; key players</b> — current squad quality (€M market value).<br>
           <b>Recent form</b> — points from last 10 competitive games (W=3, D=1, L=0).<br>
-          <b>Historical pedigree</b> — WC titles × 8 + WC appearances × 0.6.<br>
+          <b>Historical pedigree</b> — WC titles × 8 + appearances × 0.6, <b>capped at 12%</b> so history can't outvote current quality.<br>
+          <b>Fitness / availability</b> — % of first-choice XI fit going into June 2026 (injury news).<br>
           <b>Host advantage</b> — flat bonus for USA / Mexico / Canada.<br>
-          <b>Head-to-head record</b> — small Elo nudge for specific rivalries.
+          <b>Head-to-head record</b> — small Elo nudge for specific rivalries.<br>
+          <b>Recency weighting</b> — training matches decay with a 7-year half-life, so Euro 2024 / NLF 2025 results count ~4-5× more than 2010 matches.
         </div>
       </div>
     </div>
@@ -581,11 +587,12 @@ python3 wc2026_live.py undo
     <div class="caps">Disclaimer</div>
     <div class="disc-box">
       This dashboard is a transparent statistical model for education and entertainment.
-      Team Elo ratings, squad values, form, and H2H figures are <strong>curated approximations</strong>,
-      not an official live feed. The 48-team field and group draw are illustrative (seeded by rating
-      rather than the official FIFA draw). The logistic regression is trained on a hand-encoded subset
-      of historical WC match data — results should be interpreted with that context.
-      <strong>Not betting advice.</strong>
+      Team Elo ratings, squad values, form, injury figures and H2H records are <strong>curated
+      approximations</strong> from public reporting, not an official live feed. The field reflects
+      verified March 2026 playoff outcomes (Italy out after losing to Bosnia-Herzegovina on
+      penalties; Scotland and Norway qualified) but remains partly illustrative, and the group
+      draw is seeded by rating rather than the official FIFA draw. Injury/availability scores are
+      editorial estimates from June 2026 squad news. <strong>Not betting advice.</strong>
     </div>
     <p style="margin-top:14px">Built with Python · NumPy · "Velocity Strike" design system · Generated __DATE__</p>
   </div>
@@ -623,13 +630,21 @@ function facBars(t) {
     ['Squad / players',    f.squad,    (W.squad*100).toFixed(0)+'%'],
     ['Recent form',        f.form,     (W.form*100).toFixed(0)+'%'],
     ['Historical pedigree',f.pedigree, (W.pedigree*100).toFixed(0)+'%'],
+    ['Fitness / availability', f.availability ?? 100, ((W.availability||0)*100).toFixed(0)+'%'],
   ];
   const bars = feats.map(([n,v,w]) =>
     `<div class="fac"><div class="ft"><span>${n} <span style="color:var(--lime);font-size:10px">(${w})</span></span><span class="fv">${v.toFixed(0)}/100</span></div>
      <div class="fbar"><i style="width:${v}%"></i></div></div>`).join('');
   const hostChip = t.host ? `<span class="dchip g">HOST +${f.host_bonus}</span>` : '';
+  const injOut = (t.injuries_out||[]).map(p =>
+    `<span class="dchip" style="background:rgba(255,59,48,.14);color:var(--red)">🚑 ${p[0]} OUT</span>`).join('');
+  const injDoubt = (t.injuries_doubtful||[]).map(p =>
+    `<span class="dchip" style="background:rgba(255,180,0,.13);color:#ffb400">⚠ ${p[0]} doubtful</span>`).join('');
+  const injLine = (injOut || injDoubt)
+    ? `<div class="detchips" style="margin-top:8px">${injOut}${injDoubt}</div>` : '';
   return `<div class="players-line">Key players: <b>${t.key_players.join('</b>, <b>')}</b></div>
     <div class="facgrid">${bars}</div>
+    ${injLine}
     <div class="detchips">
       <span class="dchip">Power ${t.power_index}</span>
       <span class="dchip m">Eff. Elo ${t.eff_elo}</span>
@@ -637,6 +652,7 @@ function facBars(t) {
       <span class="dchip m">€${t.squad_value_m}M squad</span>
       <span class="dchip m">${t.conf}</span>
       <span class="dchip m">${t.wc_appearances} WC appearances</span>
+      <span class="dchip ${t.availability<100?'':'g'}" style="${t.availability<100?'background:rgba(255,59,48,.14);color:var(--red)':''}">Fitness ${t.availability??100}%</span>
       ${hostChip}
     </div>`;
 }
@@ -720,7 +736,7 @@ render();
 (function(){
   document.getElementById('n-train-m').textContent = MM.n_train;
   document.getElementById('n-sims-m').textContent = C.N_SIMS.toLocaleString();
-  const wnames = {elo:'Elo rating (learned)',squad:'Squad value / players',form:'Recent form (learned)',pedigree:'Historical pedigree (learned)'};
+  const wnames = {elo:'Elo rating (learned)',squad:'Squad value / players',form:'Recent form (learned)',pedigree:'Historical pedigree (capped)',availability:'Fitness / injuries'};
   document.getElementById('weights-panel').innerHTML = Object.entries(W).map(([k,v])=>{
     const pct = (v*100).toFixed(1);
     return `<div class="wrow">
@@ -729,10 +745,11 @@ render();
       <div class="wpct">${pct}%</div></div>`;
   }).join('');
   document.getElementById('weights-note').innerHTML =
-    `Elo and pedigree weights are derived from the logistic regression's Win-class coefficients
-     (standardised × feature std → natural-scale importance), then renormalised. Squad value
-     (20%) and form (~28%) are allocated separately since pre-tournament squad valuations and
-     exact form records are harder to reconstruct historically. Host advantage = +${C.HOST_BONUS} index points (flat).`;
+    `Elo and pedigree weights are learned from the regression's Win-class coefficients on
+     recency-weighted training data (7-year half-life), then <b>balance-regularised</b>:
+     pedigree is capped at 12% (excess flows to recent form) so historical glory can't
+     outvote current quality, and 10% is reserved for the fitness/injury signal.
+     Squad value (~18%) is allocated separately. Host advantage = +${C.HOST_BONUS} index points (flat).`;
   const cs = [['μ — avg goals/team/match',C.MU],['γ — goal sensitivity',C.GAMMA],
     ['Elo base (Power 0)',C.ELO_BASE],['Elo per index point',C.ELO_SPAN],
     ['Host bonus (index)',C.HOST_BONUS],['Max H2H nudge (Elo)',C.H2H_MAX_NUDGE],
@@ -753,10 +770,12 @@ render();
   document.getElementById('val-grid').innerHTML = stats.map(s=>
     `<div class="val-stat"><div class="v">${s.v}</div><div class="k">${s.k}</div><div class="delta">${s.delta}</div></div>`).join('');
 
-  const years = Object.entries(MM.backtest_by_year);
+  const TNAMES = {WC:'World Cup', Euro:'Euro', CA:'Copa América', NLF:'Nations Lg', WCQ:'Qualifiers'};
+  const years = Object.entries(MM.backtest_by_year)
+    .sort((a,b)=>a[0].slice(0,4).localeCompare(b[0].slice(0,4)));
   document.getElementById('yr-bars').innerHTML = years.map(([yr,d])=>
     `<div class="yr-bar-card">
-       <div class="ylab">${yr}<span class="badge ${d.split==='test'?'test':'train'}">${d.split==='test'?'TEST':'TRAIN'}</span></div>
+       <div class="ylab">${TNAMES[d.tournament]||d.tournament} ${yr.slice(0,4)}<span class="badge ${d.split==='test'?'test':'train'}">${d.split==='test'?'TEST':'TRAIN'}</span></div>
        <div class="acc-bar"><i style="width:${d.accuracy}%"></i></div>
        <div class="yr-acc-val mono" style="color:${d.split==='test'?'var(--green)':'var(--lime)'}">${d.accuracy}%</div>
        <div style="font-size:11px;color:var(--muted);margin-top:3px">${d.total} matches</div>
@@ -969,6 +988,7 @@ def main(n_sims=M.N_SIMS):
             .replace("__DATA__", json.dumps(payload))
             .replace("__NSIMS__", f"{n_sims:,}")
             .replace("__DATE__", payload["generated"])
+            .replace("__NTRAIN__", str(int(mm['n_train'])))
             .replace("54.8% ± 1.8%", f"{mm['cv_mean']}% ± {mm['cv_std']}%")
             .replace("WC 2022 · 59% accuracy", f"WC 2022 · {mm['test_acc']}% accuracy"))
     # Write index.html for GitHub Pages (served at the repo root URL)

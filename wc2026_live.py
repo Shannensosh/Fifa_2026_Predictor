@@ -140,12 +140,12 @@ def add_result(code_a, code_b, goals_a, goals_b, stage, date=None):
     elo_upd[code_a] = round(elo_upd.get(code_a, 0) + delta_a, 2)
     elo_upd[code_b] = round(elo_upd.get(code_b, 0) + delta_b, 2)
 
-    # Build match feature row for retraining
+    # Build match feature row for retraining.
+    # TEAMS tuple: (name, flag, conf, rank, elo, titles, apps, value, players, form)
+    # pedigree = titles × 8 + WC appearances × 0.6  →  indices 5 and 6
     from wc2026_data import TEAMS
-    ped_a = TEAMS.get(code_a, (None,)*10)[4]*8 + TEAMS.get(code_a, (None,)*10)[5]*0.6 \
-            if code_a in TEAMS else 0.0
-    ped_b = TEAMS.get(code_b, (None,)*10)[4]*8 + TEAMS.get(code_b, (None,)*10)[5]*0.6 \
-            if code_b in TEAMS else 0.0
+    ped_a = TEAMS[code_a][5]*8 + TEAMS[code_a][6]*0.6 if code_a in TEAMS else 0.0
+    ped_b = TEAMS[code_b][5]*8 + TEAMS[code_b][6]*0.6 if code_b in TEAMS else 0.0
 
     match_record = {
         "team_a":    code_a,

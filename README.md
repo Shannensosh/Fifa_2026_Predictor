@@ -30,8 +30,21 @@ python3 wc2026_model.py
 ### Layer 1 · Multinomial Logistic Regression  (statistical weight learning)
 
 The model **does not use hand-tuned weights**. Instead it trains a 3-class
-softmax regression on **~98 real World Cup matches** (2010 South Africa,
-2014 Brazil, 2018 Russia) to predict Win / Draw / Loss for each team.
+softmax regression (sklearn) on **388 real international matches**:
+
+| Source | Matches | Competition weight |
+|---|---|---|
+| World Cup 2010 / 2014 / 2018 | 95 | 1.00 |
+| UEFA Euro 2012 / 2016 / 2020 / **2024** | 165 | 0.88 |
+| Copa América 2015 / 2019 / 2021 / 2024 | 99 | 0.85 |
+| Nations League Finals 2021 / 2023 / **2025** | 12 | 0.78 |
+| **WC 2026 European qualifiers & playoffs (2025-26)** | 17 | 0.60 |
+
+Two weighting schemes apply on top of competition importance:
+- **Recency decay** (7-year half-life): a Euro 2024 match counts ~3.3× more
+  than a WC 2010 match, so the model is anchored to current football.
+- **Balance regularisation**: the learned pedigree weight is capped at 12%
+  (excess flows to recent form) so historical glory can't outvote current quality.
 
 | Feature (per match) | Description |
 |---|---|
@@ -39,31 +52,44 @@ softmax regression on **~98 real World Cup matches** (2010 South Africa,
 | `ped_diff` | Pedigree difference: (titles × 8 + WC appearances × 0.6) |
 | `host` | +1 if Team A is host, −1 if Team B, 0 otherwise |
 
-The magnitude of the learned Win-class coefficients (scaled by feature std)
-determines the relative importance of each feature → **the Power Index weights**.
-
-#### Learned weights (from logistic regression)
+#### Learned weights (current build)
 
 | Parameter | Weight | Source |
 |---|---|---|
-| **Elo rating** | **42.4%** | Learned from regression coefficients |
-| **Recent form (last 10 games)** | **28.3%** | Allocated proportionally from Elo split |
-| **Squad value / key players** | **20.0%** | Fixed (no historical squad-value records) |
-| **Historical pedigree** | **9.3%** | Learned from regression coefficients |
+| **Elo rating** | **38.6%** | Learned from regression coefficients |
+| **Recent form (last 10 games)** | **25.7%** | Carved from Elo share + pedigree overflow |
+| **Squad value / key players** | **18.0%** | Fixed allocation |
+| **Fitness / availability (injuries)** | **10.0%** | June 2026 squad news, % of first XI fit |
+| **Historical pedigree** | **7.7%** | Learned, under the 12% balance cap |
 | **Host advantage** | +6 index pts | Flat bonus (regression-confirmed) |
 | **Head-to-head record** | ±0–25 Elo | Applied at match level only |
+
+#### Injury / availability signal (new)
+
+Each team carries an `availability` score = % of its first-choice XI fully fit,
+from June 2026 squad reporting (e.g. Brazil 72% — Rodrygo, Militão, Estêvão out;
+Netherlands 68% — Timber, Simons, Schouten, de Ligt out; Portugal 100%).
+Players out/doubtful are listed per team in the dashboard's expandable rows.
+
+#### Field correction (March 2026 playoffs)
+
+The 48-team field reflects verified playoff outcomes: **Italy failed to qualify**
+(lost the playoff final to Bosnia-Herzegovina on penalties — a third straight
+missed World Cup), so Bosnia and Scotland replace Italy and Wales in the field.
 
 #### Train / test validation
 
 | Set | Tournaments | Matches | Accuracy |
 |---|---|---|---|
-| Training | 2010, 2014, 2018 | 98 | 64.3% |
-| **Test (held-out)** | **2022** | **39** | **61.5%** |
+| Training | 2010–2026 (5 competitions) | 388 | 54.7% |
+| 5-fold CV | stratified | 388 | 53.4% ± 2.7% |
+| **Test (held-out)** | **WC 2022** | **39** | **59.0%** |
 | Naive baseline | — | — | ~57% |
 
-The model improves on the naive "always pick the stronger team" baseline by
-**+4.5 percentage points** on unseen data. Football's low-scoring nature means
-upsets are common — even the best published models reach 55–65%.
+Accuracy is lower than the WC-only v1 because the expanded dataset contains many
+more evenly-matched fixtures (Euro/Copa knockouts), which are intrinsically harder
+to call — but the probabilities are better calibrated (Brier 0.177 on test) and
+generalise beyond World Cup conditions.
 
 ### Layer 2 · Poisson Goals Model  (match-level probability)
 
