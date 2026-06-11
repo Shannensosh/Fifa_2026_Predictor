@@ -32,8 +32,9 @@ PREDICTION ARCHITECTURE
   LAYER 3 · MONTE CARLO TOURNAMENT SIMULATION  (title probability)
   ────────────────────────────────────────────────────────────────
   N_SIMS full 48-team / 12-group 2026 brackets.
-  Bootstrap CI: repeat N_BOOT=50 mini-sims (2000 runs each) to get
-  the 90% confidence interval on every team's title %.
+  90% confidence interval on every team's title % via the analytic
+  Wilson score interval on the championship proportion (O(1), no
+  re-simulation — replaced the old 100k-run bootstrap).
 
   LAYER 4 · ONLINE LEARNING  (wc2026_live.py)
   ──────────────────────────────────────────────
@@ -65,20 +66,28 @@ MU            = 1.35
 GAMMA         = 0.85
 H2H_MAX_NUDGE = 25.0
 N_SIMS        = 20000
-N_BOOT        = 50       # bootstrap mini-sims for CI  (×2000 runs each)
-BOOT_SIMS     = 2000
 RNG_SEED      = 2026
 CLASSES       = ['W', 'D', 'L']
 
 # Fallback weights (overwritten by the trained regression at run time)
-WEIGHTS = {"elo": 0.40, "squad": 0.18, "form": 0.20, "pedigree": 0.12,
-           "availability": 0.10}
+WEIGHTS = {"elo": 0.36, "squad": 0.16, "form": 0.18, "pedigree": 0.10,
+           "availability": 0.10, "trajectory": 0.10}
 
 # Balance regularisation: learned weights are clipped to these bands so no
 # single factor dominates ("fine balance"). Excess pedigree weight is
 # redistributed to recent form.
 PEDIGREE_CAP      = 0.12   # max share for historical pedigree
 AVAILABILITY_WGT  = 0.10   # fixed share for injury/availability signal
+TRAJECTORY_WGT    = 0.10   # fixed share for squad-age / trajectory signal
+
+# Trajectory: average squad age mapped to a 0-1 "rising vs ageing" score.
+# AGE_YOUNG → 1.0 (youngest, most upside), AGE_OLD → 0.0 (ageing, penalised).
+AGE_YOUNG = 24.5
+AGE_OLD   = 30.5
+
+# Confidence-interval method for the title %: analytic Wilson score interval
+# (z for a 90% two-sided interval). Replaces the old bootstrap re-simulation.
+CI_Z = 1.645
 
 # Live results file (written by wc2026_live.py)
 LIVE_FILE = os.path.join(os.path.dirname(__file__), "live_results.json")
@@ -185,14 +194,15 @@ def _derive_weights(clf, scaler, feat_names):
         form_w += ped_w - PEDIGREE_CAP
         ped_w   = PEDIGREE_CAP
 
-    # Carve a fixed share for injury/availability from all factors pro-rata.
-    scale = 1.0 - AVAILABILITY_WGT
+    # Carve fixed shares for availability and trajectory from the rest pro-rata.
+    scale = 1.0 - AVAILABILITY_WGT - TRAJECTORY_WGT
     return {
         "elo":          round(elo_w   * scale, 4),
         "squad":        round(squad_w * scale, 4),
         "form":         round(form_w  * scale, 4),
         "pedigree":     round(ped_w   * scale, 4),
         "availability": round(AVAILABILITY_WGT, 4),
+        "trajectory":   round(TRAJECTORY_WGT, 4),
     }, dict(zip(feat_names, [round(float(v), 4) for v in imp]))
 
 
@@ -317,12 +327,16 @@ def compute_power(teams, weights=None):
         # missing 15% of its first-choice XI scores 0.85 here regardless of
         # how injured the rest of the field is.
         avail_n = t.get("availability", 100) / 100.0
+        # Trajectory: younger squads rewarded, older squads penalised.
+        age     = t.get("avg_age", 27.6)
+        traj_n  = max(0.0, min(1.0, (AGE_OLD - age) / (AGE_OLD - AGE_YOUNG)))
         power   = 100.0 * (
             weights["elo"]      * elo_n  +
             weights["squad"]    * val_n  +
             weights["form"]     * form_n +
             weights["pedigree"] * ped_n  +
-            weights.get("availability", 0.0) * avail_n
+            weights.get("availability", 0.0) * avail_n +
+            weights.get("trajectory", 0.0)   * traj_n
         )
         if t["host"]:
             power += HOST_BONUS
@@ -330,6 +344,7 @@ def compute_power(teams, weights=None):
             "elo": round(elo_n*100, 1), "squad": round(val_n*100, 1),
             "form": round(form_n*100, 1), "pedigree": round(ped_n*100, 1),
             "availability": round(avail_n*100, 1),
+            "trajectory": round(traj_n*100, 1),
             "host_bonus": HOST_BONUS if t["host"] else 0.0,
         }
         t["power_index"] = round(power, 1)
@@ -413,31 +428,36 @@ def _simulate_once(rng, group_items, n_sims):
     return champ, final, semi, quarter, advance
 
 
-def simulate(teams, groups, n_sims=N_SIMS, seed=RNG_SEED, n_boot=N_BOOT, boot_sims=BOOT_SIMS):
-    """Run main simulation + bootstrap for confidence intervals."""
+def _wilson_ci(x, n, z=CI_Z):
+    """Wilson score interval (as percentages) for x successes out of n.
+
+    This is the exact sampling-uncertainty interval for a Monte-Carlo
+    proportion — the same quantity the old bootstrap estimated, but computed
+    analytically in O(1) instead of re-simulating 100k tournaments.
+    """
+    if n == 0:
+        return 0.0, 0.0
+    p   = x / n
+    z2  = z * z
+    den = 1.0 + z2 / n
+    centre = (p + z2 / (2 * n)) / den
+    half   = (z * math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))) / den
+    return max(0.0, (centre - half) * 100.0), min(100.0, (centre + half) * 100.0)
+
+
+def simulate(teams, groups, n_sims=N_SIMS, seed=RNG_SEED):
+    """Run the Monte-Carlo simulation once and derive analytic Wilson CIs."""
     rng         = np.random.default_rng(seed)
     codes       = [t["code"] for t in teams]
     group_items = list(groups.items())
 
-    # Main run
     champ, final, semi, quarter, advance = _simulate_once(rng, group_items, n_sims)
-
-    # Bootstrap CI (50 × 2000 runs with different seeds)
-    boot_champ = {c: [] for c in codes}
-    for b in range(n_boot):
-        brng = np.random.default_rng(seed + b + 1)
-        bc, *_ = _simulate_once(brng, group_items, boot_sims)
-        for c in codes:
-            boot_champ[c].append(100.0 * bc[c] / boot_sims)
 
     stats = {}
     for c in codes:
-        mean  = 100.0 * champ[c] / n_sims
-        boots = sorted(boot_champ[c])
-        lo    = boots[int(0.05 * n_boot)]
-        hi    = boots[int(0.95 * n_boot)]
+        lo, hi = _wilson_ci(champ[c], n_sims)
         stats[c] = {
-            "win_pct":    round(mean, 2),
+            "win_pct":    round(100.0 * champ[c]   / n_sims, 2),
             "win_ci_lo":  round(lo, 2),
             "win_ci_hi":  round(hi, 2),
             "final_pct":  round(100.0 * final[c]   / n_sims, 2),
@@ -535,7 +555,7 @@ def run(n_sims=N_SIMS, verbose=False):
         "features": feat_names, "classes": CLASSES,
         "feat_importance": feat_imp,
         "weights": WEIGHTS,
-        "n_sims": n_sims, "n_boot": N_BOOT, "boot_sims": BOOT_SIMS,
+        "n_sims": n_sims, "ci_method": "Wilson score (90%)",
         "backtest_by_year": bt_by_yr,
         "backtest_rows": bt_rows,
         "live_matches_count": len(live_matches),

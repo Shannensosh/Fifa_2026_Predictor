@@ -106,6 +106,35 @@ HEAD_TO_HEAD = {
 # Teams not listed default to 100 (no notable injury news found).
 # Populated from injury-news research; importance: "star" | "key" | "squad".
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Average age of the likely starting XI going into June 2026.
+# Used to derive a "trajectory" score: younger/rising squads are rewarded,
+# aging squads penalised. Teams not listed default to DEFAULT_AGE.
+# Estimates from public squad reporting (approximate, starting XI).
+# ---------------------------------------------------------------------------
+SQUAD_AGE = {
+    "SPA": 25.3,  # youngest elite core (Yamal, Cubarsí, Pedri)
+    "ENG": 26.1,  # young, ascending (Bellingham, Saka, Mainoo)
+    "GER": 26.4,  # rebuilt around Wirtz / Musiala
+    "NOR": 26.5,  # Haaland / Ødegaard generation
+    "USA": 26.6,
+    "FRA": 27.0,  # prime window, very deep
+    "JPN": 27.1,
+    "MAR": 27.2,
+    "ECU": 26.0,
+    "URU": 27.3,  # refreshed post-Suárez/Cavani
+    "NED": 27.6,
+    "BRA": 27.6,
+    "MEX": 28.1,
+    "POR": 28.4,  # young talent but Ronaldo (41) inflates the core
+    "BEL": 28.6,  # De Bruyne / Lukaku ageing
+    "COL": 28.7,  # James Rodríguez (34)
+    "ARG": 29.6,  # ageing champions — Messi (38), Otamendi, De Paul
+    "CRO": 30.1,  # oldest core — Modrić (40), Perišić
+}
+
+DEFAULT_AGE = 27.6
+
 INJURIES = {
     # Researched June 2026 (web sources; availability = % of first-XI fully fit)
     "ARG": {"availability": 88,
@@ -185,5 +214,6 @@ def get_teams():
             "availability": inj.get("availability", DEFAULT_AVAILABILITY),
             "injuries_out": inj.get("out", []),
             "injuries_doubtful": inj.get("doubtful", []),
+            "avg_age": SQUAD_AGE.get(code, DEFAULT_AGE),
         })
     return out

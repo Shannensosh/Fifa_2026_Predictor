@@ -56,13 +56,23 @@ Two weighting schemes apply on top of competition importance:
 
 | Parameter | Weight | Source |
 |---|---|---|
-| **Elo rating** | **38.6%** | Learned from regression coefficients |
-| **Recent form (last 10 games)** | **25.7%** | Carved from Elo share + pedigree overflow |
-| **Squad value / key players** | **18.0%** | Fixed allocation |
+| **Elo rating** | **34.3%** | Learned from regression coefficients |
+| **Recent form (last 10 games)** | **22.9%** | Carved from Elo share + pedigree overflow |
+| **Squad value / key players** | **16.0%** | Fixed allocation |
 | **Fitness / availability (injuries)** | **10.0%** | June 2026 squad news, % of first XI fit |
-| **Historical pedigree** | **7.7%** | Learned, under the 12% balance cap |
+| **Squad trajectory / age** | **10.0%** | Avg starting-XI age — rewards rising, penalises ageing squads |
+| **Historical pedigree** | **6.8%** | Learned, under the 12% balance cap |
 | **Host advantage** | +6 index pts | Flat bonus (regression-confirmed) |
 | **Head-to-head record** | ±0–25 Elo | Applied at match level only |
+
+#### Squad trajectory factor (new)
+
+Average starting-XI age maps to a 0–100 trajectory score: **age 24.5 → 100**
+(youngest, most upside), **age 30.5 → 0** (ageing). This shifts the forecast
+toward squad quality/momentum rather than pure historical rating — e.g. it moved
+**Argentina** (avg age 29.6, the ageing 2022 champions) from #1 down to #3, and
+lifted **Spain** (avg age 25.3, Euro 2024 champions) and **France** (prime window)
+to the top — closer to bookmaker/pundit consensus.
 
 #### Injury / availability signal (new)
 
@@ -110,6 +120,11 @@ Simulates the full 48-team / 12-group 2026 bracket **20,000 times**. Each run:
 3. **Knockouts** — R32 → R16 → QF → SF → Final. Draws → strength-weighted shootout.
 
 Counting how often each team wins each round gives title %, final %, semi %, KO-advance %.
+
+**Confidence intervals** on each title % use the analytic **Wilson score interval**
+on the championship proportion — the exact sampling-uncertainty interval for a
+Monte-Carlo estimate, computed in O(1). This replaced an earlier 100k-run
+bootstrap, cutting the full build from **~13s to ~3s** with no loss of accuracy.
 
 ---
 

@@ -51,6 +51,7 @@ def build_payload(n_sims):
         "availability": t.get("availability", 100),
         "injuries_out": t.get("injuries_out", []),
         "injuries_doubtful": t.get("injuries_doubtful", []),
+        "avg_age": t.get("avg_age", 27.6),
         "power_index": t["power_index"], "factors": t["factors"],
         "win_pct":     round(t["win_pct"], 2),
         "win_ci_lo":   round(t.get("win_ci_lo", t["win_pct"]), 2),
@@ -355,7 +356,7 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
       <span class="pill">HELD-OUT TEST <b>WC 2022 · 59% accuracy</b></span>
       <span class="pill">5-FOLD CV <b>54.8% ± 1.8%</b></span>
       <span class="pill">INJURY DATA <b>June 2026 squad news</b></span>
-      <span class="pill">SIMULATIONS <b>__NSIMS__ + bootstrap CI</b></span>
+      <span class="pill">SIMULATIONS <b>__NSIMS__ + Wilson 90% CI</b></span>
       <span class="pill">UPDATED <b>__DATE__</b></span>
     </div>
     <div class="podium" id="podium"></div>
@@ -447,6 +448,7 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
           <b>Recent form</b> — points from last 10 competitive games (W=3, D=1, L=0).<br>
           <b>Historical pedigree</b> — WC titles × 8 + appearances × 0.6, <b>capped at 12%</b> so history can't outvote current quality.<br>
           <b>Fitness / availability</b> — % of first-choice XI fit going into June 2026 (injury news).<br>
+          <b>Squad trajectory / age</b> — average starting-XI age: younger, rising squads rewarded, ageing squads penalised.<br>
           <b>Host advantage</b> — flat bonus for USA / Mexico / Canada.<br>
           <b>Head-to-head record</b> — small Elo nudge for specific rivalries.<br>
           <b>Recency weighting</b> — training matches decay with a 7-year half-life, so Euro 2024 / NLF 2025 results count ~4-5× more than 2010 matches.
@@ -631,6 +633,7 @@ function facBars(t) {
     ['Recent form',        f.form,     (W.form*100).toFixed(0)+'%'],
     ['Historical pedigree',f.pedigree, (W.pedigree*100).toFixed(0)+'%'],
     ['Fitness / availability', f.availability ?? 100, ((W.availability||0)*100).toFixed(0)+'%'],
+    ['Squad trajectory / age', f.trajectory ?? 50, ((W.trajectory||0)*100).toFixed(0)+'%'],
   ];
   const bars = feats.map(([n,v,w]) =>
     `<div class="fac"><div class="ft"><span>${n} <span style="color:var(--lime);font-size:10px">(${w})</span></span><span class="fv">${v.toFixed(0)}/100</span></div>
@@ -653,6 +656,7 @@ function facBars(t) {
       <span class="dchip m">${t.conf}</span>
       <span class="dchip m">${t.wc_appearances} WC appearances</span>
       <span class="dchip ${t.availability<100?'':'g'}" style="${t.availability<100?'background:rgba(255,59,48,.14);color:var(--red)':''}">Fitness ${t.availability??100}%</span>
+      <span class="dchip m">Avg age ${(t.avg_age??27.6).toFixed(1)}</span>
       ${hostChip}
     </div>`;
 }
@@ -736,7 +740,7 @@ render();
 (function(){
   document.getElementById('n-train-m').textContent = MM.n_train;
   document.getElementById('n-sims-m').textContent = C.N_SIMS.toLocaleString();
-  const wnames = {elo:'Elo rating (learned)',squad:'Squad value / players',form:'Recent form (learned)',pedigree:'Historical pedigree (capped)',availability:'Fitness / injuries'};
+  const wnames = {elo:'Elo rating (learned)',squad:'Squad value / players',form:'Recent form (learned)',pedigree:'Historical pedigree (capped)',availability:'Fitness / injuries',trajectory:'Squad trajectory / age'};
   document.getElementById('weights-panel').innerHTML = Object.entries(W).map(([k,v])=>{
     const pct = (v*100).toFixed(1);
     return `<div class="wrow">
@@ -981,7 +985,7 @@ renderExplainer(selA.value, selB.value);
 
 
 def main(n_sims=M.N_SIMS):
-    print(f"Running {n_sims:,} tournament simulations + bootstrap CI…")
+    print(f"Running {n_sims:,} tournament simulations + analytic Wilson CI…")
     payload = build_payload(n_sims)
     mm = payload["model_meta"]
     html = (HTML
