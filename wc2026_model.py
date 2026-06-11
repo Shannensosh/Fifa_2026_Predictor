@@ -359,6 +359,13 @@ GROUP_LETTERS = [chr(ord("A") + i) for i in range(12)]
 
 
 def build_groups(teams):
+    """Use the real official 2026 draw when available, else fall back to a
+    Power-Index-seeded synthetic draw."""
+    from wc2026_data import OFFICIAL_GROUPS
+    by_code = {t["code"]: t for t in teams}
+    if OFFICIAL_GROUPS and all(c in by_code for g in OFFICIAL_GROUPS.values() for c in g):
+        return {g: [by_code[c] for c in codes] for g, codes in OFFICIAL_GROUPS.items()}
+    # Fallback: snake-seed by Power Index
     ordered = sorted(teams, key=lambda t: t["power_index"], reverse=True)
     pots    = [ordered[i*12:(i+1)*12] for i in range(4)]
     groups  = {g: [] for g in GROUP_LETTERS}

@@ -30,7 +30,7 @@ python3 wc2026_model.py
 ### Layer 1 · Multinomial Logistic Regression  (statistical weight learning)
 
 The model **does not use hand-tuned weights**. Instead it trains a 3-class
-softmax regression (sklearn) on **388 real international matches**:
+softmax regression (sklearn) on **411 real international matches**:
 
 | Source | Matches | Competition weight |
 |---|---|---|
@@ -38,7 +38,8 @@ softmax regression (sklearn) on **388 real international matches**:
 | UEFA Euro 2012 / 2016 / 2020 / **2024** | 165 | 0.88 |
 | Copa América 2015 / 2019 / 2021 / 2024 | 99 | 0.85 |
 | Nations League Finals 2021 / 2023 / **2025** | 12 | 0.78 |
-| **WC 2026 European qualifiers & playoffs (2025-26)** | 17 | 0.60 |
+| WC 2026 European qualifiers & playoffs (2025-26) | 17 | 0.60 |
+| **June 2026 pre-tournament friendlies** | 23 | 0.55 |
 
 Two weighting schemes apply on top of competition importance:
 - **Recency decay** (7-year half-life): a Euro 2024 match counts ~3.3× more
@@ -81,20 +82,43 @@ from June 2026 squad reporting (e.g. Brazil 72% — Rodrygo, Militão, Estêvão
 Netherlands 68% — Timber, Simons, Schouten, de Ligt out; Portugal 100%).
 Players out/doubtful are listed per team in the dashboard's expandable rows.
 
-#### Field correction (March 2026 playoffs)
+#### Real field + official group draw (verified June 2026)
 
-The 48-team field reflects verified playoff outcomes: **Italy failed to qualify**
-(lost the playoff final to Bosnia-Herzegovina on penalties — a third straight
-missed World Cup), so Bosnia and Scotland replace Italy and Wales in the field.
+The 48-team field and the full **official group draw (groups A–L, drawn 5 Dec 2025)**
+are the real ones, cross-verified against Wikipedia and NBC Sports. This replaced
+an earlier synthetic seeded draw, so the simulation now plays the *actual* group
+fixtures — e.g. Spain drew a tough Group H with Uruguay, while Argentina got a
+kinder Group J. Eight teams that missed qualification (Italy, Denmark, Serbia,
+Poland, Nigeria, Cameroon, Costa Rica, Jamaica) were replaced by the real
+qualifiers, including debutants **Curaçao, Cape Verde, Jordan** and returnees
+**Haiti, DR Congo, Iraq, South Africa, Czechia**. Italy lost the UEFA playoff
+final to Bosnia on penalties — a third straight missed World Cup.
+
+*(The knockout bracket is still strength-seeded rather than the exact official
+R32 crossings — a known remaining simplification.)*
 
 #### Train / test validation
 
 | Set | Tournaments | Matches | Accuracy |
 |---|---|---|---|
-| Training | 2010–2026 (5 competitions) | 388 | 54.7% |
-| 5-fold CV | stratified | 388 | 53.4% ± 2.7% |
+| Training | 2010–2026 (6 competition types) | 411 | 56.2% |
+| 5-fold CV | stratified | 411 | 56.0% ± 2.7% |
 | **Test (held-out)** | **WC 2022** | **39** | **59.0%** |
 | Naive baseline | — | — | ~57% |
+
+Adding the June 2026 friendlies lifted CV accuracy 53.4% → 56.0% and improved
+calibration (Brier 0.177 → 0.172).
+
+#### What does *not* help (tested, see `wc2026_experiments.py`)
+
+- **Up/down-sampling or class balancing** — *hurts*. Brier degrades 0.177 → 0.202
+  and CV accuracy drops ~5 pts. The W/D/L class frequencies are real signal
+  (favourites genuinely win ~48%), so forcing balance makes the model over-predict
+  upsets. **Conclusion: do not resample.**
+- **Richer engineered features** (Elo², interactions, win-expectancy) — no gain;
+  test accuracy unchanged and Brier slightly worse (overfitting). `elo_diff`
+  already captures the strength signal near-optimally. Real accuracy gains would
+  need genuinely new data (xG, lineups, rest days), not feature tweaks.
 
 Accuracy is lower than the WC-only v1 because the expanded dataset contains many
 more evenly-matched fixtures (Euro/Copa knockouts), which are intrinsically harder

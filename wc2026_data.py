@@ -22,6 +22,27 @@ Each team carries the parameters the model uses:
 
 HOSTS = {"USA", "MEX", "CAN"}
 
+# ---------------------------------------------------------------------------
+# OFFICIAL 2026 World Cup group draw (held 5 Dec 2025, Washington D.C.).
+# Verified June 2026 against Wikipedia + NBC Sports (cross-matched team-for-team).
+# Hosts seeded as group heads: MEX→A, CAN→B, USA→D.
+# Codes use this module's internal convention (SPA = Spain).
+# ---------------------------------------------------------------------------
+OFFICIAL_GROUPS = {
+    "A": ["MEX", "RSA", "KOR", "CZE"],
+    "B": ["CAN", "BIH", "QAT", "SUI"],
+    "C": ["BRA", "MAR", "HAI", "SCO"],
+    "D": ["USA", "PAR", "AUS", "TUR"],
+    "E": ["GER", "CUW", "CIV", "ECU"],
+    "F": ["NED", "JPN", "SWE", "TUN"],
+    "G": ["BEL", "EGY", "IRN", "NZL"],
+    "H": ["SPA", "CPV", "KSA", "URU"],
+    "I": ["FRA", "SEN", "IRQ", "NOR"],
+    "J": ["ARG", "ALG", "AUT", "JOR"],
+    "K": ["POR", "COD", "UZB", "COL"],
+    "L": ["ENG", "CRO", "GHA", "PAN"],
+}
+
 # code: (name, flag, confederation, fifa_rank, elo, titles, wc_appearances,
 #        squad_value_m, [key players], form)
 TEAMS = {
@@ -41,22 +62,22 @@ TEAMS = {
     "USA": ("USA",          "🇺🇸", "CONCACAF", 15, 1845, 0, 11, 380,  ["Christian Pulisic", "Weston McKennie", "Gio Reyna"], "LWLLWWWDWL"),
     "MEX": ("Mexico",       "🇲🇽", "CONCACAF", 16, 1860, 0, 17, 300,  ["Santiago Giménez", "Edson Álvarez", "Hirving Lozano"], "WWWDDWWWLD"),
     "SUI": ("Switzerland",  "🇨🇭", "UEFA",     17, 1875, 0, 12, 420,  ["Granit Xhaka", "Manuel Akanji", "Dan Ndoye"], "WDWLWWDWLW"),
-    "DEN": ("Denmark",      "🇩🇰", "UEFA",     18, 1880, 0, 6,  450,  ["Rasmus Højlund", "Pierre-Emile Højbjerg", "Christian Eriksen"], "WWLWDWWLWD"),
+    "CZE": ("Czechia",      "🇨🇿", "UEFA",     18, 1820, 0, 9,  340,  ["Patrik Schick", "Tomáš Souček", "Adam Hložek"], "WWDLWWDWLW"),
     "JPN": ("Japan",        "🇯🇵", "AFC",      19, 1890, 0, 7,  340,  ["Takefusa Kubo", "Ritsu Doan", "Wataru Endo"], "WWWWWWDLDW"),
     "SEN": ("Senegal",      "🇸🇳", "CAF",      20, 1865, 0, 4,  380,  ["Sadio Mané", "Nicolas Jackson", "Pape Sarr"], "WWDLWWWDLW"),
     "IRN": ("Iran",         "🇮🇷", "AFC",      21, 1810, 0, 6,  120,  ["Mehdi Taremi", "Alireza Jahanbakhsh", "Sardar Azmoun"], "WWDWLWDWWL"),
     "KOR": ("South Korea",  "🇰🇷", "AFC",      22, 1840, 0, 11, 280,  ["Son Heung-min", "Lee Kang-in", "Kim Min-jae"], "WDWWLWDWWL"),
     "AUS": ("Australia",    "🇦🇺", "AFC",      23, 1755, 0, 6,  110,  ["Mathew Ryan", "Jackson Irvine", "Riley McGree"], "WDLWWDWLWD"),
-    "SRB": ("Serbia",       "🇷🇸", "UEFA",     24, 1820, 0, 13, 480,  ["Dušan Vlahović", "Aleksandar Mitrović", "Sergej Milinković-Savić"], "DWLWWDLWWD"),
+    "RSA": ("South Africa", "🇿🇦", "CAF",      24, 1745, 0, 3,  90,   ["Percy Tau", "Lyle Foster", "Ronwen Williams"], "WWDWLWDWWD"),
     "ECU": ("Ecuador",      "🇪🇨", "CONMEBOL", 25, 1825, 0, 4,  330,  ["Moisés Caicedo", "Pervis Estupiñán", "Kendry Páez"], "WDWWLDWWDW"),
     "AUT": ("Austria",      "🇦🇹", "UEFA",     26, 1830, 0, 8,  430,  ["David Alaba", "Marcel Sabitzer", "Konrad Laimer"], "WWDWLWWDWL"),
-    "UKR": ("Ukraine",      "🇺🇦", "UEFA",     27, 1800, 0, 1,  360,  ["Mykhailo Mudryk", "Artem Dovbyk", "Oleksandr Zinchenko"], "WDLWWDLWDW"),
+    "IRQ": ("Iraq",         "🇮🇶", "AFC",      27, 1750, 0, 1,  45,   ["Aymen Hussein", "Ali Jasim", "Zidane Iqbal"], "WWDWWLDWLW"),
     "TUR": ("Turkey",       "🇹🇷", "UEFA",     28, 1810, 0, 2,  490,  ["Arda Güler", "Hakan Çalhanoğlu", "Kenan Yıldız"], "WWLWDWWLWD"),
-    "NGA": ("Nigeria",      "🇳🇬", "CAF",      29, 1790, 0, 6,  340,  ["Victor Osimhen", "Ademola Lookman", "Alex Iwobi"], "WDWWLWDWLW"),
+    "JOR": ("Jordan",       "🇯🇴", "AFC",      29, 1715, 0, 0,  28,   ["Mousa Al-Tamari", "Yazan Al-Naimat", "Nizar Al-Rashdan"], "WWDWLWWDWL"),
     "CAN": ("Canada",       "🇨🇦", "CONCACAF", 30, 1780, 0, 2,  260,  ["Alphonso Davies", "Jonathan David", "Stephen Eustáquio"], "WDLWWDWWLD"),
     "EGY": ("Egypt",        "🇪🇬", "CAF",      31, 1770, 0, 3,  220,  ["Mohamed Salah", "Omar Marmoush", "Mohamed Elneny"], "WWDWLWWDLW"),
     "NOR": ("Norway",       "🇳🇴", "UEFA",     32, 1855, 0, 4,  520,  ["Erling Haaland", "Martin Ødegaard", "Alexander Sørloth"], "DWLWWWWWWW"),
-    "POL": ("Poland",       "🇵🇱", "UEFA",     33, 1760, 0, 9,  300,  ["Robert Lewandowski", "Piotr Zieliński", "Nicola Zalewski"], "WDLWDWLWDW"),
+    "HAI": ("Haiti",        "🇭🇹", "CONCACAF", 33, 1655, 0, 1,  35,   ["Frantzdy Pierrot", "Duckens Nazon", "Danley Jean Jacques"], "WLDWWLDWLW"),
     "SWE": ("Sweden",       "🇸🇪", "UEFA",     34, 1755, 0, 12, 360,  ["Alexander Isak", "Viktor Gyökeres", "Dejan Kulusevski"], "WWDLWWDLWW"),
     "SCO": ("Scotland",     "🏴", "UEFA",    35, 1845, 0, 9,  350,  ["Scott McTominay", "Andrew Robertson", "John McGinn"], "WWDWWLWDWW"),
     "BIH": ("Bosnia-Herz.", "🇧🇦", "UEFA",     36, 1820, 0, 2,  180,  ["Edin Džeko", "Ermedin Demirović", "Anel Ahmedhodžić"], "DWWDWLWDWD"),
@@ -66,13 +87,13 @@ TEAMS = {
     "KSA": ("Saudi Arabia", "🇸🇦", "AFC",      39, 1700, 0, 6,  90,   ["Salem Al-Dawsari", "Firas Al-Buraikan", "Mohammed Kanno"], "DWLWDLWDWL"),
     "QAT": ("Qatar",        "🇶🇦", "AFC",      40, 1690, 0, 1,  80,   ["Akram Afif", "Almoez Ali", "Hassan Al-Haydos"], "WDWLWDLWWD"),
     "PAN": ("Panama",       "🇵🇦", "CONCACAF", 41, 1710, 0, 1,  70,   ["Adalberto Carrasquilla", "Ismael Díaz", "Michael Murillo"], "WWDLWDWLWD"),
-    "CRC": ("Costa Rica",   "🇨🇷", "CONCACAF", 42, 1680, 0, 6,  60,   ["Keylor Navas", "Manfred Ugalde", "Joel Campbell"], "DWLWDLWDWL"),
+    "CUW": ("Curaçao",      "🇨🇼", "CONCACAF", 42, 1640, 0, 0,  22,   ["Tahith Chong", "Juninho Bacuna", "Leandro Bacuna"], "WDWLWDWLWD"),
     "GHA": ("Ghana",        "🇬🇭", "CAF",      43, 1700, 0, 4,  250,  ["Mohammed Kudus", "Thomas Partey", "Iñaki Williams"], "WLDWWLDWLW"),
-    "CMR": ("Cameroon",     "🇨🇲", "CAF",      44, 1715, 0, 8,  230,  ["André Onana", "Bryan Mbeumo", "Vincent Aboubakar"], "WDLWWDLWDW"),
+    "COD": ("DR Congo",     "🇨🇩", "CAF",      44, 1745, 0, 1,  180,  ["Yoane Wissa", "Cédric Bakambu", "Chancel Mbemba"], "WWDWLWDWWL"),
     "TUN": ("Tunisia",      "🇹🇳", "CAF",      45, 1695, 0, 6,  120,  ["Hannibal Mejbri", "Aïssa Laïdouni", "Ellyes Skhiri"], "DWLWDWLDWL"),
     "UZB": ("Uzbekistan",   "🇺🇿", "AFC",      46, 1690, 0, 0,  90,   ["Eldor Shomurodov", "Abbosbek Fayzullaev", "Jaloliddin Masharipov"], "WWDLWDWLWD"),
     "NZL": ("New Zealand",  "🇳🇿", "OFC",      47, 1610, 0, 2,  40,   ["Chris Wood", "Marko Stamenić", "Tim Payne"], "WDWLWDLWWD"),
-    "JAM": ("Jamaica",      "🇯🇲", "CONCACAF", 48, 1660, 0, 1,  130,  ["Leon Bailey", "Michail Antonio", "Demarai Gray"], "DWLDWLWDWL"),
+    "CPV": ("Cape Verde",   "🇨🇻", "CAF",      48, 1690, 0, 0,  45,   ["Ryan Mendes", "Garry Rodrigues", "Jovane Cabral"], "WWDWLWWDLW"),
 }
 
 # Notable head-to-head records (all-time, competitive + friendly, approximate),

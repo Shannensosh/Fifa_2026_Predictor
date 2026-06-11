@@ -352,7 +352,7 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
     __NSIMS__ simulated tournaments.</p>
     <div class="pills">
       <span class="pill">ENGINE <b>sklearn LR + Poisson + Monte-Carlo</b></span>
-      <span class="pill">TRAINING DATA <b>__NTRAIN__ matches · WC + Euro + Copa + NLF + WCQ</b></span>
+      <span class="pill">TRAINING DATA <b>__NTRAIN__ matches · WC + Euro + Copa + NLF + qualifiers + 2026 friendlies</b></span>
       <span class="pill">HELD-OUT TEST <b>WC 2022 · 59% accuracy</b></span>
       <span class="pill">5-FOLD CV <b>54.8% ± 1.8%</b></span>
       <span class="pill">INJURY DATA <b>June 2026 squad news</b></span>
@@ -506,8 +506,8 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
 <!-- ─── GROUPS ─────────────────────────────────────────────────────────── -->
 <section id="groups">
   <div class="wrap">
-    <div class="shead"><h2>Group Stage</h2><span class="caps">12 groups · seeded by power index</span></div>
-    <p class="sub">Illustrative seeded draw (top 2 of each group plus the 8 best third-placed teams reach the knockouts). Percentage = simulated chance of advancing from this group.</p>
+    <div class="shead"><h2>Group Stage</h2><span class="caps">official 2026 draw · groups A–L</span></div>
+    <p class="sub">The <strong style="color:var(--on)">real official draw</strong> (held 5 Dec 2025, verified). Top 2 of each group plus the 8 best third-placed teams reach the knockouts. Percentage = simulated chance of advancing. <em>Note: the knockout bracket is still strength-seeded rather than the exact official R32 crossings.</em></p>
     <div class="groups-grid" id="groups-grid"></div>
   </div>
 </section>
@@ -592,8 +592,9 @@ python3 wc2026_live.py undo
       Team Elo ratings, squad values, form, injury figures and H2H records are <strong>curated
       approximations</strong> from public reporting, not an official live feed. The field reflects
       verified March 2026 playoff outcomes (Italy out after losing to Bosnia-Herzegovina on
-      penalties; Scotland and Norway qualified) but remains partly illustrative, and the group
-      draw is seeded by rating rather than the official FIFA draw. Injury/availability scores are
+      penalties; Bosnia, Scotland, Czechia, Sweden, Türkiye, DR Congo, Iraq, Haiti, Curaçao,
+      Cape Verde, Jordan & South Africa among the qualifiers). The group stage uses the real
+      official draw; the knockout bracket is strength-seeded. Injury/availability scores are
       editorial estimates from June 2026 squad news. <strong>Not betting advice.</strong>
     </div>
     <p style="margin-top:14px">Built with Python · NumPy · "Velocity Strike" design system · Generated __DATE__</p>

@@ -146,6 +146,15 @@ _ELO = {
         'MKD':1790,'ISL':1795,'FRA':2080,'IRL':1805,'POR':2010,'UKR':1860,
         'SCO':1845,'DEN':1890,'NIR':1775,'BIH':1820,
     },
+    # ── June 2026 pre-tournament warm-up friendlies ──────────────────────────
+    'fr2026': {
+        'ENG':2030,'CRC':1680,'NZL':1610,'FRA':2085,'NIR':1775,'GER':1975,
+        'USA':1845,'FIN':1840,'NED':1975,'UZB':1690,'ALG':1740,'MAR':1920,
+        'NOR':1855,'SWE':1755,'COL':1915,'JOR':1715,'CRO':1925,'SVN':1845,
+        'BEL':1965,'TUN':1695,'ESP':2070,'PER':1855,'ARG':2105,'ISL':1795,
+        'HON':1785,'BRA':2010,'EGY':1770,'PAN':1710,'POR':2015,'CHI':1895,
+        'SEN':1865,'JPN':1890,'MEX':1860,'SRB':1855,'NGA':1790,
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -266,6 +275,14 @@ _PED = {
         'POR':0+8*0.6,  'UKR':0+1*0.6,    'SCO':0+8*0.6,  'DEN':0+6*0.6,
         'NIR':0+3*0.6,  'BIH':0+1*0.6,
     },
+    'fr2026': {
+        'ENG':1*8+16*0.6,'FRA':2*8+16*0.6,'GER':4*8+20*0.6,'NED':0+11*0.6,
+        'ESP':1*8+16*0.6,'ARG':3*8+18*0.6,'BRA':5*8+22*0.6,'POR':0+8*0.6,
+        'BEL':0+14*0.6,  'CRO':0+6*0.6,   'MEX':0+17*0.6,  'JPN':0+7*0.6,
+        'COL':0+6*0.6,   'NOR':0+4*0.6,   'MAR':0+6*0.6,   'SEN':0+3*0.6,
+        'USA':0+11*0.6,  'CHI':0+9*0.6,   'PER':0+5*0.6,   'EGY':0+3*0.6,
+        'NGA':0+6*0.6,   'SRB':0+13*0.6,  'TUN':0+6*0.6,   'SWE':0+12*0.6,
+    },
 }
 
 
@@ -310,6 +327,9 @@ def _nlf(key, ta, tb, host, outcome):
 
 def _wcq(key, ta, tb, host, outcome):
     return _feat(key, ta, tb, host, outcome, tournament='WCQ', comp_weight=0.60)
+
+def _fr(key, ta, tb, host, outcome):
+    return _feat(key, ta, tb, host, outcome, tournament='FR', comp_weight=0.55)
 
 
 # ---------------------------------------------------------------------------
@@ -834,6 +854,33 @@ MATCHES_TRAIN = [
     _wcq('wcq2025','ITA','NIR',  1,'W'),   # 2-0 playoff SF (Mar 2026)
     _wcq('wcq2025','BIH','ITA',  1,'D'),   # 1-1 playoff final at 90; BIH won pens —
                                            # Italy miss a third straight World Cup
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # June 2026 pre-tournament warm-up friendlies (verified web research)
+    # ═══════════════════════════════════════════════════════════════════════
+    _fr('fr2026','ENG','CRC',  0,'W'),   # 3-0
+    _fr('fr2026','ENG','NZL',  0,'W'),   # 1-0
+    _fr('fr2026','FRA','NIR',  0,'W'),   # 3-1 (Olise hat-trick)
+    _fr('fr2026','GER','USA',  0,'W'),   # 2-1
+    _fr('fr2026','GER','FIN',  0,'W'),   # 4-0
+    _fr('fr2026','NED','UZB',  0,'W'),   # 2-1 (laboured)
+    _fr('fr2026','NED','ALG',  0,'L'),   # 0-1 UPSET
+    _fr('fr2026','MAR','NOR',  0,'D'),   # 1-1
+    _fr('fr2026','NOR','SWE',  0,'W'),   # 3-1
+    _fr('fr2026','COL','JOR',  0,'W'),   # 2-0
+    _fr('fr2026','CRO','SVN',  0,'W'),   # 2-1 (late winner)
+    _fr('fr2026','BEL','TUN',  0,'W'),   # 5-0
+    _fr('fr2026','BEL','CRO',  0,'W'),   # 2-0
+    _fr('fr2026','ESP','PER',  0,'W'),   # 3-1
+    _fr('fr2026','ARG','ISL',  0,'W'),   # 3-0
+    _fr('fr2026','ARG','HON',  0,'W'),   # 2-0
+    _fr('fr2026','BRA','EGY',  0,'W'),   # 2-1
+    _fr('fr2026','BRA','PAN',  0,'W'),   # 6-2
+    _fr('fr2026','POR','NGA',  0,'W'),   # 2-1
+    _fr('fr2026','POR','CHI',  0,'W'),   # 2-1
+    _fr('fr2026','USA','SEN',  0,'W'),   # 3-2
+    _fr('fr2026','JPN','ISL',  0,'W'),   # 1-0
+    _fr('fr2026','MEX','SRB',  0,'W'),   # 5-1
 ]
 
 # ---------------------------------------------------------------------------
