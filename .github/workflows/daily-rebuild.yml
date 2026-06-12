@@ -34,7 +34,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install numpy scikit-learn
+        run: pip install -r requirements.txt
 
       - name: Rebuild dashboard (train model + 20k simulations)
         run: python build_dashboard.py
