@@ -99,7 +99,7 @@ def build_payload(n_sims):
             "N_SIMS":        n_sims,
         },
         "model_meta": _clean(meta),
-        "generated": datetime.date.today().isoformat(),
+        "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
     }
 
 
@@ -332,6 +332,7 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
   <div class="wrap hbar">
     <div class="logo">PREDICT<span>·</span>26</div>
     <span class="tag">Monte-Carlo Engine</span>
+    <span class="tag" style="border-color:rgba(204,255,0,.45);color:var(--lime)" title="Auto-rebuilt daily by GitHub Actions">⟳ Updated __DATE__</span>
     <nav>
       <a href="#race">Title Race</a>
       <a href="#model">Model</a>
