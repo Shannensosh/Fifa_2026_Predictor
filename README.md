@@ -109,7 +109,24 @@ R32 crossings — a known remaining simplification.)*
 Adding the June 2026 friendlies lifted CV accuracy 53.4% → 56.0% and improved
 calibration (Brier 0.177 → 0.172).
 
-#### What does *not* help (tested, see `wc2026_experiments.py`)
+#### Tuning & methodology improvements (see `wc2026_tuning.py`)
+
+- **Dropped `host` from the regression** — ablation showed it was near-dead-weight
+  and slightly *hurt* calibration (most WC matches are neutral-venue). Removing it
+  improved Brier 0.173 → 0.170 at the same 64.1% accuracy. The 2026 host edge is
+  still applied as the separate flat +6 Power-Index bonus.
+- **Margin-of-victory Elo** (`wc2026_live.py`) — the live update now multiplies by a
+  goal-difference factor (×1 / ×1.5 / ×(11+GD)/8), so a 7-1 win shifts ratings far
+  more than a 1-0. Standard World-Football-Elo practice.
+- **Dixon-Coles correction** (ρ = −0.08) on the Poisson match model — lifts the
+  low-score cells so the simulated draw rate (≈26%) matches reality (25.6% in the
+  test set), vs 24.1% for plain independent Poisson. Fixes the favourite-vs-minnow
+  draw under-prediction.
+
+#### What does *not* help (tested, see `wc2026_experiments.py` / `wc2026_tuning.py`)
+
+- **Hyperparameter tuning** — the model is insensitive to `C` (0.05→10) and to
+  L1/L2/elastic-net; no meaningful gain available.
 
 - **Up/down-sampling or class balancing** — *hurts*. Brier degrades 0.177 → 0.202
   and CV accuracy drops ~5 pts. The W/D/L class frequencies are real signal

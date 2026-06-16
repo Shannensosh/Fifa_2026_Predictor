@@ -64,6 +64,8 @@ ELO_BASE      = 1450.0
 ELO_SPAN      = 7.0
 MU            = 1.35
 GAMMA         = 0.85
+DC_RHO        = -0.08   # Dixon-Coles low-score correction (<0 → more 0-0/1-1
+                        # draws); 0 = plain independent Poisson. Tuned on data.
 H2H_MAX_NUDGE = 25.0
 N_SIMS        = 20000
 RNG_SEED      = 2026
@@ -112,21 +114,24 @@ def _train_model(live_matches=None):
     Returns: (scaler, clf, X_tr_raw, y_tr, sw_tr,
                X_te_raw, y_te, cv_scores, feat_names)
     """
-    # comp_weight is used ONLY as sample_weight (not as a feature)
-    # Features are: elo_diff, ped_diff, host  (3 cols)
+    # Features are: elo_diff, ped_diff  (2 cols).
+    # 'host' was dropped: feature-ablation showed it was near-dead-weight and
+    # slightly hurt calibration on the held-out test (most WC matches are
+    # neutral-venue). The 2026 host edge is still applied as a separate flat
+    # +HOST_BONUS Power-Index bonus, so nothing is lost for the tournament.
+    # comp_weight is used ONLY as sample_weight (not as a feature).
     X_all, y_tr, sw_tr, _, _ = get_dataset()
-    X_tr = [[x[0], x[1], x[2]] for x in X_all]   # drop comp_weight column
+    X_tr = [[x[0], x[1]] for x in X_all]   # elo_diff, ped_diff
 
     # Append live 2026 matches (WC weight = 1.0)
     if live_matches:
         for m in live_matches:
-            X_tr.append([m['elo_diff'], m['ped_diff'], m.get('host', 0)])
+            X_tr.append([m['elo_diff'], m['ped_diff']])
             y_tr.append(m['outcome'])
             sw_tr.append(1.0)
 
-    # Test set (WC 2022 — held-out, always, 3 features)
-    X_te = [[m['elo_diff'], m['ped_diff'], m.get('host', 0)]
-            for m in MATCHES_TEST]
+    # Test set (WC 2022 — held-out, always)
+    X_te = [[m['elo_diff'], m['ped_diff']] for m in MATCHES_TEST]
     y_te = [m['outcome'] for m in MATCHES_TEST]
 
     # Scale features (fit on train only)
@@ -155,7 +160,7 @@ def _train_model(live_matches=None):
     clf = _build_clf()
     clf.fit(Xs_tr, y_tr, sample_weight=np.array(sw_tr))
 
-    feat_names = ['elo_diff', 'ped_diff', 'host']
+    feat_names = ['elo_diff', 'ped_diff']
     return scaler, clf, X_tr, y_tr, sw_tr, X_te, y_te, cv_raw, feat_names
 
 
@@ -206,13 +211,13 @@ def _derive_weights(clf, scaler, feat_names):
     }, dict(zip(feat_names, [round(float(v), 4) for v in imp]))
 
 
-def _match_explanation(scaler, clf, elo_diff, ped_diff, host):
+def _match_explanation(scaler, clf, elo_diff, ped_diff):
     """Per-feature log-odds attribution for one match (team_a vs team_b).
 
     Returns dict: feature → contribution toward P(Win) in log-odds units.
     """
-    feat_names = ['elo_diff', 'ped_diff', 'host']
-    raw = np.array([[elo_diff, ped_diff, host]])
+    feat_names = ['elo_diff', 'ped_diff']
+    raw = np.array([[elo_diff, ped_diff]])
     z   = scaler.transform(raw)[0]              # standardised feature vector
     win_idx = CLASSES.index('W')
     coef    = clf.coef_[win_idx]
@@ -223,11 +228,10 @@ def _match_explanation(scaler, clf, elo_diff, ped_diff, host):
 
 def _backtest_rows(scaler, clf):
     """Per-match backtest for all train + test matches."""
-    feat_names = ['elo_diff', 'ped_diff', 'host', 'comp_weight']
     rows = []
     for pool, split in [(MATCHES_TRAIN, 'train'), (MATCHES_TEST, 'test')]:
         for m in pool:
-            x = [[m['elo_diff'], m['ped_diff'], m.get('host', 0)]]
+            x = [[m['elo_diff'], m['ped_diff']]]
             xs = scaler.transform(np.array(x, dtype=float))
             proba = clf.predict_proba(xs)[0]
             proba_dict = dict(zip(clf.classes_, proba))
@@ -248,7 +252,7 @@ def _backtest_rows(scaler, clf):
 
 
 def _brier(scaler, clf, X_raw, y):
-    xs = scaler.transform(np.array([[r[0], r[1], r[2]] for r in X_raw], dtype=float))
+    xs = scaler.transform(np.array([[r[0], r[1]] for r in X_raw], dtype=float))
     proba = clf.predict_proba(xs)
     scores = []
     for c, idx in zip(clf.classes_, range(len(clf.classes_))):
@@ -283,6 +287,16 @@ def _pmf(k, lam):
     return math.exp(-lam) * lam ** k / math.factorial(k)
 
 
+def _dc_tau(i, j, la, lb, rho=DC_RHO):
+    """Dixon-Coles low-score correction. Lifts 0-0 / 1-1 (more draws) and
+    trims 1-0 / 0-1 when rho < 0. Returns 1.0 for all other scorelines."""
+    if i == 0 and j == 0: return 1.0 - la * lb * rho
+    if i == 0 and j == 1: return 1.0 + la * rho
+    if i == 1 and j == 0: return 1.0 + lb * rho
+    if i == 1 and j == 1: return 1.0 - rho
+    return 1.0
+
+
 def match_prediction(team_a, team_b, max_goals=10):
     elo_a  = team_a["eff_elo"] + _h2h_nudge(team_a["code"], team_b["code"])
     la, lb = _lambdas(elo_a, team_b["eff_elo"])
@@ -292,7 +306,7 @@ def match_prediction(team_a, team_b, max_goals=10):
     best_score, best_p = (0, 0), 0.0
     for i in range(max_goals + 1):
         for j in range(max_goals + 1):
-            p = pa[i] * pb[j]
+            p = pa[i] * pb[j] * _dc_tau(i, j, la, lb)   # Dixon-Coles correction
             if p > best_p: best_p, best_score = p, (i, j)
             if i > j:    p_win  += p
             elif i == j: p_draw += p
@@ -376,9 +390,38 @@ def build_groups(teams):
     return groups
 
 
+# Cache of Dixon-Coles scoreline distributions, keyed by rounded (la, lb).
+# Team eff_elos are discrete, so only a few thousand distinct pairs ever occur —
+# each is built once, then sampled by inverse-CDF lookup (fast).
+_DC_CACHE = {}
+_DC_MAXG = 8   # goal grid 0..7 per side
+
+
+def _dc_distribution(la, lb):
+    key = (round(la, 3), round(lb, 3))
+    d = _DC_CACHE.get(key)
+    if d is None:
+        pa = [_pmf(i, la) for i in range(_DC_MAXG)]
+        pb = [_pmf(j, lb) for j in range(_DC_MAXG)]
+        probs, cells = [], []
+        for i in range(_DC_MAXG):
+            for j in range(_DC_MAXG):
+                probs.append(pa[i] * pb[j] * _dc_tau(i, j, la, lb))
+                cells.append((i, j))
+        tot = sum(probs)
+        cum = np.cumsum([p / tot for p in probs])
+        d = (cum, cells)
+        _DC_CACHE[key] = d
+    return d
+
+
 def _sim_goals(rng, elo_a, elo_b):
     la, lb = _lambdas(elo_a, elo_b)
-    return int(rng.poisson(la)), int(rng.poisson(lb))
+    cum, cells = _dc_distribution(la, lb)
+    idx = int(np.searchsorted(cum, rng.random()))
+    if idx >= len(cells):
+        idx = len(cells) - 1
+    return cells[idx]
 
 
 def _ko_winner(rng, a, b):
@@ -584,9 +627,8 @@ def explain_match(code_a, code_b, teams_by_code, model_meta):
     a, b = teams_by_code[code_a], teams_by_code[code_b]
     elo_d = a["elo"] - b["elo"]
     ped_d = (a["titles"]*8 + a["wc_appearances"]*0.6) - (b["titles"]*8 + b["wc_appearances"]*0.6)
-    host  = (1 if a.get("host") else -1 if b.get("host") else 0)
     scaler, clf = model_meta["_scaler"], model_meta["_clf"]
-    return _match_explanation(scaler, clf, elo_d, ped_d, host)
+    return _match_explanation(scaler, clf, elo_d, ped_d)
 
 
 if __name__ == "__main__":

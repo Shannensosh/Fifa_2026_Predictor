@@ -75,6 +75,18 @@ def _expected(elo_a, elo_b):
     return 1.0 / (1.0 + 10.0 ** ((elo_b - elo_a) / 400.0))
 
 
+def _gd_multiplier(goals_a, goals_b):
+    """Goal-difference weight for the Elo update (World Football Elo index).
+    A 1-goal win moves ratings ×1, a 2-goal win ×1.5, 3+ goals ×(11+GD)/8.
+    So Germany 7-1 shifts Elo far more than a 1-0 — the margin now matters."""
+    gd = abs(goals_a - goals_b)
+    if gd <= 1:
+        return 1.0
+    if gd == 2:
+        return 1.5
+    return (11.0 + gd) / 8.0
+
+
 def _actual(goals_a, goals_b):
     """Actual score for team_a  (1.0 / 0.5 / 0.0)."""
     if goals_a > goals_b: return 1.0
@@ -129,13 +141,14 @@ def add_result(code_a, code_b, goals_a, goals_b, stage, date=None):
     elo_a = base_elo.get(code_a, 1850) + elo_upd.get(code_a, 0)
     elo_b = base_elo.get(code_b, 1850) + elo_upd.get(code_b, 0)
 
-    # TD-learning Elo update
+    # TD-learning Elo update, scaled by margin of victory
     K = K_FACTORS.get(stage.lower(), DEFAULT_K)
+    G = _gd_multiplier(goals_a, goals_b)
     E = _expected(elo_a, elo_b)
     S = _actual(goals_a, goals_b)
 
-    delta_a =  K * (S     - E)
-    delta_b =  K * ((1-S) - (1-E))
+    delta_a =  K * G * (S     - E)
+    delta_b =  K * G * ((1-S) - (1-E))
 
     elo_upd[code_a] = round(elo_upd.get(code_a, 0) + delta_a, 2)
     elo_upd[code_b] = round(elo_upd.get(code_b, 0) + delta_b, 2)

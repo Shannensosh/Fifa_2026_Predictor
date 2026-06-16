@@ -26,7 +26,8 @@ import urllib.request
 DIR        = os.path.dirname(os.path.abspath(__file__))
 LEAGUE_ID  = "4429"   # FIFA World Cup on TheSportsDB
 BASE       = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={d}&l=" + LEAGUE_ID
-DAYS_BACK  = 6        # how many days of fixtures to scan each run
+TOURNAMENT_START = datetime.date(2026, 6, 11)   # scan every day from kickoff…
+MAX_DAYS   = 45       # …up to this many days (whole tournament window)
 GROUP_ROUNDS = {"1", "2", "3"}   # TheSportsDB intRound for the 3 group matchdays
 
 # TheSportsDB team name (normalised) -> internal code
@@ -77,10 +78,14 @@ def main():
     existing = _load().get("matches", [])
     seen_pairs = {frozenset((m["team_a"], m["team_b"])) for m in existing}
 
-    # Scan a window of recent dates (UTC)
+    # Scan every day from the tournament start through tomorrow (UTC).
+    # Iterating from kickoff (not a rolling window) guarantees completeness
+    # even if the feed assigns matches to slightly different dates.
     today = datetime.datetime.now(datetime.timezone.utc).date()
-    dates = [(today - datetime.timedelta(days=i)).isoformat()
-             for i in range(DAYS_BACK, -2, -1)]   # oldest → newest, incl. tomorrow
+    end = today + datetime.timedelta(days=1)
+    n_days = min(MAX_DAYS, (end - TOURNAMENT_START).days + 1)
+    dates = [(TOURNAMENT_START + datetime.timedelta(days=i)).isoformat()
+             for i in range(max(0, n_days))]
 
     candidates = []
     for d in dates:

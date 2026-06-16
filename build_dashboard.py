@@ -95,6 +95,7 @@ def build_payload(n_sims):
             "ELO_SPAN":      M.ELO_SPAN,
             "MU":            M.MU,
             "GAMMA":         M.GAMMA,
+            "DC_RHO":        M.DC_RHO,
             "H2H_MAX_NUDGE": M.H2H_MAX_NUDGE,
             "N_SIMS":        n_sims,
         },
@@ -419,15 +420,17 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
       </div>
       <div class="arch-step">
         <div class="step-num">LAYER 2 · MATCH PROBABILITY</div>
-        <div class="step-title">Poisson Goals Model</div>
+        <div class="step-title">Poisson + Dixon-Coles</div>
         <div class="step-desc">
-          Converts the effective Elo gap between two teams into expected goals, then
-          enumerates the joint scoreline distribution to get exact
-          <b>Win / Draw / Loss probabilities</b> and the most likely score.
+          Converts the effective Elo gap into expected goals, then enumerates the
+          joint scoreline distribution for exact <b>Win / Draw / Loss probabilities</b>.
           <br><br><span class="mono" style="color:var(--lime);font-size:13px">
           λ<sub>A</sub> = μ · exp(+γ · Δelo / 400)<br>
           λ<sub>B</sub> = μ · exp(−γ · Δelo / 400)</span>
-          <br>μ = 1.35 avg goals/team · γ = 0.85 sensitivity
+          <br>μ = 1.35 · γ = 0.85.
+          <br><br>A <b>Dixon-Coles</b> correction (ρ = −0.08) lifts the low-score
+          cells so the draw rate matches reality (≈26%) — plain independent Poisson
+          under-predicts the favourite-vs-minnow draws.
         </div>
       </div>
       <div class="arch-step">
@@ -567,9 +570,10 @@ python3 wc2026_live.py undo
 <span class="cm"># Goals = 90-min score (AET/pens counts as draw)</span></div>
         <div class="note-box" style="margin-top:12px">
           <b style="color:var(--on)">Why this is reinforcement learning:</b><br>
-          The Elo update rule — <span class="mono" style="color:var(--lime)">ΔElo = K·(S−E)</span> — is mathematically identical to
+          The Elo update rule — <span class="mono" style="color:var(--lime)">ΔElo = K·G·(S−E)</span> — is mathematically identical to
           TD(0) learning: the "reward signal" (actual S minus expected E) drives a gradient step on the team's strength estimate.
-          K=20 (group), 25 (knockouts), 30 (final). After each update, the LR model retrains so W/D/L probabilities
+          K=20 (group), 25 (knockouts), 30 (final); <b>G is a goal-difference multiplier</b> (×1 / ×1.5 / ×(11+GD)/8) so a 7-1 win
+          moves ratings far more than a 1-0. After each update, the LR model retrains so W/D/L probabilities
           recalibrate for the rest of the tournament.
         </div>
       </div>
@@ -757,6 +761,7 @@ render();
      outvote current quality, and 10% is reserved for the fitness/injury signal.
      Squad value (~18%) is allocated separately. Host advantage = +${C.HOST_BONUS} index points (flat).`;
   const cs = [['μ — avg goals/team/match',C.MU],['γ — goal sensitivity',C.GAMMA],
+    ['ρ — Dixon-Coles draw corr.',C.DC_RHO],
     ['Elo base (Power 0)',C.ELO_BASE],['Elo per index point',C.ELO_SPAN],
     ['Host bonus (index)',C.HOST_BONUS],['Max H2H nudge (Elo)',C.H2H_MAX_NUDGE],
     ['Simulations',C.N_SIMS.toLocaleString()]];
@@ -921,7 +926,6 @@ function renderExplainer(a, b){
   const features = [
     ['elo_diff',  'Elo Strength'],
     ['ped_diff',  'WC Pedigree'],
-    ['host',      'Host Bonus'],
     ['bias',      'Model Intercept'],
   ];
   grid.innerHTML = features.map(([k,n])=>{
