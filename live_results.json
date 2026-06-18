@@ -399,6 +399,46 @@
       "label": "AUT vs JOR",
       "year": 2026,
       "tournament": "WC26"
+    },
+    {
+      "team_a": "ENG",
+      "team_b": "CRO",
+      "goals_a": 4,
+      "goals_b": 2,
+      "stage": "group",
+      "date": "2026-06-17",
+      "elo_diff": 105,
+      "ped_diff": 14.0,
+      "host": 0,
+      "comp_weight": 1.0,
+      "outcome": "W",
+      "elo_delta_a": 10.6,
+      "elo_delta_b": -10.6,
+      "elo_a_before": 2030,
+      "elo_b_before": 1925,
+      "label": "ENG vs CRO",
+      "year": 2026,
+      "tournament": "WC26"
+    },
+    {
+      "team_a": "UZB",
+      "team_b": "COL",
+      "goals_a": 1,
+      "goals_b": 3,
+      "stage": "group",
+      "date": "2026-06-18",
+      "elo_diff": -225,
+      "ped_diff": -3.6,
+      "host": 0,
+      "comp_weight": 1.0,
+      "outcome": "L",
+      "elo_delta_a": -6.45,
+      "elo_delta_b": 6.45,
+      "elo_a_before": 1690,
+      "elo_b_before": 1915,
+      "label": "UZB vs COL",
+      "year": 2026,
+      "tournament": "WC26"
     }
   ],
   "elo_updates": {
@@ -441,6 +481,10 @@
     "ARG": 3.81,
     "ALG": -3.81,
     "AUT": 10.21,
-    "JOR": -10.21
+    "JOR": -10.21,
+    "ENG": 10.6,
+    "CRO": -10.6,
+    "UZB": -6.45,
+    "COL": 6.45
   }
 }
