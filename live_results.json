@@ -759,6 +759,26 @@
       "label": "NOR vs SEN",
       "year": 2026,
       "tournament": "WC26"
+    },
+    {
+      "team_a": "ENG",
+      "team_b": "GHA",
+      "goals_a": 0,
+      "goals_b": 0,
+      "stage": "group",
+      "date": "2026-06-23",
+      "elo_diff": 340.6,
+      "ped_diff": 15.2,
+      "host": 0,
+      "comp_weight": 1.0,
+      "outcome": "D",
+      "elo_delta_a": -7.53,
+      "elo_delta_b": 7.53,
+      "elo_a_before": 2040.6,
+      "elo_b_before": 1700,
+      "label": "ENG vs GHA",
+      "year": 2026,
+      "tournament": "WC26"
     }
   ],
   "elo_updates": {
@@ -802,9 +822,10 @@
     "ALG": 5.29,
     "AUT": 4.94,
     "JOR": -19.31,
-    "ENG": 10.6,
+    "ENG": 3.07,
     "CRO": -10.6,
     "UZB": -6.45,
-    "COL": 6.45
+    "COL": 6.45,
+    "GHA": 7.53
   }
 }
