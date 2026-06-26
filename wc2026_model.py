@@ -539,6 +539,39 @@ def apply_live_elo(teams, elo_updates):
     return teams
 
 
+def apply_live_form(teams, live_matches):
+    """Refresh each team's recent-form variable from its actual 2026 results.
+
+    Without this, only Elo moved as the tournament progressed while the
+    'recent form' input (≈23% of the Power Index) stayed frozen at its
+    pre-tournament value — a stale state. Here each team's live WC results
+    are merged in as the newest games of a rolling last-10 window, so the
+    form feature reflects current tournament state, consistent with Elo.
+    """
+    from collections import defaultdict
+    from wc2026_data import normalize_form
+    flip = {"W": "L", "L": "W", "D": "D"}
+    results = defaultdict(list)            # code -> [(date, result)]
+    for m in live_matches:
+        o = m.get("outcome")
+        if o is None:
+            continue
+        results[m["team_a"]].append((m.get("date", ""), o))
+        results[m["team_b"]].append((m.get("date", ""), flip.get(o, "D")))
+    by_code = {t["code"]: t for t in teams}
+    for code, lst in results.items():
+        t = by_code.get(code)
+        if not t:
+            continue
+        lst.sort(key=lambda x: x[0])                       # chronological
+        wc_newest_first = [r for _, r in reversed(lst)]    # most recent first
+        new_form = "".join((wc_newest_first + list(t["form"]))[:10])
+        t["form"] = new_form
+        t["form_points"] = normalize_form(new_form)
+        t["live_games"] = len(lst)                          # for dashboard note
+    return teams
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Orchestration
 # ─────────────────────────────────────────────────────────────────────────────
@@ -582,10 +615,12 @@ def run(n_sims=N_SIMS, verbose=False):
     for k,v in bt_by_yr.items():
         v['accuracy'] = round(100*v['correct']/v['total'], 1)
 
-    # 4. Teams — apply live Elo updates, compute Power Index, simulate
+    # 4. Teams — apply live Elo AND live form updates, compute Power Index, simulate
     teams = get_teams()
     if elo_updates:
         teams = apply_live_elo(teams, elo_updates)
+    if live_matches:
+        teams = apply_live_form(teams, live_matches)
     teams  = compute_power(teams, weights=WEIGHTS)
     groups = build_groups(teams)
     stats  = simulate(teams, groups, n_sims=n_sims)

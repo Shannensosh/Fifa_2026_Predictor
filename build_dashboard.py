@@ -47,7 +47,7 @@ def build_payload(n_sims):
         "elo": t["elo"], "eff_elo": round(t["eff_elo"], 1),
         "titles": t["titles"], "wc_appearances": t["wc_appearances"],
         "squad_value_m": t["squad_value_m"], "key_players": t["key_players"],
-        "form": t["form"], "host": t["host"],
+        "form": t["form"], "host": t["host"], "live_games": t.get("live_games", 0),
         "availability": t.get("availability", 100),
         "injuries_out": t.get("injuries_out", []),
         "injuries_doubtful": t.get("injuries_doubtful", []),
@@ -449,7 +449,7 @@ footer{padding:40px 0 64px;color:var(--muted);font-size:12px;line-height:1.7}
         <div class="step-desc">
           <b>Elo rating</b> — overall strength from match history.<br>
           <b>Squad value &amp; key players</b> — current squad quality (€M market value).<br>
-          <b>Recent form</b> — points from last 10 competitive games (W=3, D=1, L=0).<br>
+          <b>Recent form</b> — points from last 10 competitive games (W=3, D=1, L=0); <b>updates live</b> as 2026 results come in (not just Elo).<br>
           <b>Historical pedigree</b> — WC titles × 8 + appearances × 0.6, <b>capped at 12%</b> so history can't outvote current quality.<br>
           <b>Fitness / availability</b> — % of first-choice XI fit going into June 2026 (injury news).<br>
           <b>Squad trajectory / age</b> — average starting-XI age: younger, rising squads rewarded, ageing squads penalised.<br>
@@ -657,7 +657,7 @@ function facBars(t) {
     <div class="detchips">
       <span class="dchip">Power ${t.power_index}</span>
       <span class="dchip m">Eff. Elo ${t.eff_elo}</span>
-      <span class="dchip m">Form ${t.form}</span>
+      <span class="dchip ${t.live_games>0?'g':'m'}">Form ${t.form}${t.live_games>0?' ('+t.live_games+' live)':''}</span>
       <span class="dchip m">€${t.squad_value_m}M squad</span>
       <span class="dchip m">${t.conf}</span>
       <span class="dchip m">${t.wc_appearances} WC appearances</span>
